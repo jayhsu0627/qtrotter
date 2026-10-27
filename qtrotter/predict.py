@@ -20,6 +20,7 @@ For b we use the calibrated gate error per Trotter step of the actual transpiled
 (slope of the summed gate error versus r), not one uniform rate.
 """
 import numpy as np
+import pandas as pd
 from scipy.optimize import least_squares
 
 
@@ -48,6 +49,38 @@ def per_step_error(r, gate_error_sum):
     """Slope of the summed calibrated gate error versus r (removes state-preparation cost)."""
     slope, _ = np.polyfit(np.asarray(r, float), np.asarray(gate_error_sum, float), 1)
     return slope
+
+
+def semi_empirical(r, trotter_err, p_step):
+    """r minimizing 1 - (1 - E_T(r)) exp(-p_step r).
+
+    E_T is the noiseless Trotter error of this initial state (a classical simulation), and gate
+    failures are treated as independent of it: the output is right only if neither happened.
+    """
+    r, trotter_err = np.asarray(r, float), np.asarray(trotter_err, float)
+    total = 1 - (1 - trotter_err) * np.exp(-p_step * r)
+    return r[np.argmin(total)]
+
+
+def summarize(noisy, noiseless, metric="trace_dist"):
+    """Measured and predicted r* for every (model, n, t, order) in the noisy sweep."""
+    norm_cols = ["norm_A", "norm_B", "comm_AB", "spread_AB", "comm_AAB", "comm_BBA"]
+    norms = noiseless.groupby(["model", "n"])[norm_cols].first()
+    rows = []
+    for (model, n, t, order), g in noisy.groupby(["model", "n", "t", "order"]):
+        g = g.sort_values("r")
+        p_step = per_step_error(g.r, g.gate_error_sum)
+        best = g.loc[g[metric].idxmin()]
+        rows.append({
+            "model": model, "n": n, "t": t, "order": order,
+            "p_step": p_step, "twoq_per_step": np.polyfit(g.r, g.two_qubit_gates, 1)[0],
+            "r_measured": best.r, "err_at_optimum": best[metric],
+            "r_semi_empirical": semi_empirical(g.r, g[f"trotter_{metric}"], p_step),
+            "r_knee_munro": knee_munro(order, t, p_step, norms.loc[(model, n)].to_dict()),
+            "r_avtandilyan_pogosov": (avtandilyan_pogosov(order, t, p_step, n)
+                                      if model == "tfim" else np.nan),
+        })
+    return pd.DataFrame(rows)
 
 
 def fit_tradeoff(r, err, q=None):

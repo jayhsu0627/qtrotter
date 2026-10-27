@@ -8,7 +8,25 @@ predictions, [Knee & Munro (2015)](https://arxiv.org/abs/1502.04536) and
 gate error rate. It also checks how loose standard Trotter error bounds are
 ([Childs et al., 2021](https://arxiv.org/abs/1912.08854)).
 
-**Status:** work in progress. The main deliverable is the notebook in `notebooks/`.
+**Read the results:** [`notebooks/trotter_under_noise.ipynb`](notebooks/trotter_under_noise.ipynb).
+Simulation results (questions 1 and 2) are complete; the real-device check (question 3) is pending.
+
+## Results so far
+
+- **Bounds.** The commutator bound overestimates the worst-case Trotter error by about 6–7× at
+  first order and 4× at second, at every chain length; the norm bound by 10²–10³× at orders 1–2
+  and 10⁵–10⁸× at order 4, growing with n. Both reproduce Childs et al. on TFIM and XXZ chains.
+- **Optimal step count.** Under the FakeTorino noise model, the measured r\* ranges from 1 to 16
+  and grows with evolution time. Knee & Munro's prediction overshoots it by a median 2.4×,
+  Avtandilyan & Pogosov's by 3.7×.
+- **Why.** Both formulas use a worst-case Trotter term. Keeping the calibrated gate errors but
+  using the initial state's actual noiseless Trotter error predicts r\* within one grid step in
+  all 45 configurations.
+- **Order.** With grouped terms, second order costs the same two-qubit gates as first and wins
+  everywhere; fourth order (5× the gates) loses everywhere at today's error rates.
+
+![Total error versus Trotter steps under device noise](figures/fig2_noisy_tradeoff.png)
+![Predicted versus measured optimal step count](figures/fig3_predictions.png)
 
 ## Layout
 
@@ -34,7 +52,7 @@ python scripts/run_noisy.py         # question 2, ~40 min with a GPU
 
 - **Term grouping.** Each Hamiltonian is passed to `PauliEvolutionGate` as groups of commuting
   terms, `[X field, ZZ bonds]` for the TFIM. Passed as one operator, Qiskit's second-order
-  formula costs about twice the two-qubit gates of first order and about 5 to 10 times the depth.
+  formula costs 1.7 to 1.9 times the two-qubit gates of first order and about 5 times the depth.
 - **A hidden identity.** Second-order Trotter with the ZZ group outermost equals first-order
   Trotter conjugated by a half-step of ZZ. From |0...0>, Z-type observables then cannot tell the
   two orders apart (`tests/test_core.py` checks this). The X-outer grouping avoids it.
