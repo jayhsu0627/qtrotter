@@ -1,0 +1,29 @@
+# One config for every sweep. Scripts write CSVs to results/; the notebook builds all figures
+# from those CSVs.
+
+models:
+  tfim: {J: 1.0, h: 1.0}
+  xxz: {delta: 0.5}
+
+# Question 1: noiseless Trotter error against the commutator and norm bounds.
+noiseless:
+  models: [tfim, xxz]
+  sizes: [4, 6, 8, 10, 12]
+  times: [1.0, 4.0]
+  orders: [1, 2, 4]
+  steps: [1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]
+  spectral_norm_max_n: 10   # full-unitary error needs 4^n memory per matrix
+
+# Question 2: total error under a device noise model.
+noisy:
+  backend: FakeTorino
+  models: [tfim]
+  sizes: [4, 6, 8, 10, 12]
+  times: [1.0, 2.0, 4.0]
+  orders: [1, 2, 4]
+  steps: [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24, 32]
+  optimization_level: 2
+  schedule: true            # ALAP delays, so idle qubits decohere
+  seed: 1
+  device: auto              # GPU if this Aer build can use it, else CPU
+  precision: double
