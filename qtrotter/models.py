@@ -42,6 +42,17 @@ class Model:
         }
 
 
+    def local_paulis(self):
+        """Every Z_i, X_i, Z_iZ_{i+1}, X_iX_{i+1}: two measurement bases on hardware."""
+        n, ops = self.n, {}
+        for p in "ZX":
+            ops.update({f"{p}{i}": SparsePauliOp.from_sparse_list([(p, [i], 1.0)], n)
+                        for i in range(n)})
+            ops.update({f"{p}{i}{p}{i + 1}": SparsePauliOp.from_sparse_list([(p * 2, [i, i + 1], 1.0)], n)
+                        for i in range(n - 1)})
+        return ops
+
+
 def tfim(n, J=1.0, h=1.0):
     """-J sum Z_i Z_{i+1} - h sum X_i, from |0...0>. Groups: [X field, ZZ bonds].
 

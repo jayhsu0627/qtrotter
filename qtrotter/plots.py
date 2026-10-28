@@ -162,3 +162,38 @@ def predicted_vs_measured(summary, save=None):
     if save:
         fig.savefig(save, dpi=200, bbox_inches="tight")
     return fig
+
+
+def hardware_comparison(table, title="", save=None):
+    """Figure 4: RMS error of local observables on the device, its noise model, and noiseless."""
+    style()
+    orders = sorted(table.order.unique())
+    fig, axes = plt.subplots(1, len(orders), figsize=(4.4 * len(orders), 3.6), sharey=True)
+    for ax, order in zip(np.atleast_1d(axes), orders):
+        c, mk = ORDER_COLOR[order], ORDER_MARKER[order]
+        g = table[table.order == order]
+        model = g[g.source == "noise_model"].sort_values("r")
+        trot = g[g.source == "trotter"].sort_values("r")
+        ax.plot(model.r, model.rms, color=c, marker=mk)
+        ax.plot(trot.r, trot.rms, color=c, linestyle="--")
+        dev = g[g.source == "hardware"].sort_values("r")
+        if not dev.empty:
+            ax.errorbar(dev.r, dev.rms, yerr=dev.rms_std, color=INK, marker=mk, markersize=6,
+                        linestyle=":", linewidth=1.2, capsize=2, zorder=5)
+            best = dev.loc[dev.rms.idxmin()]
+            ax.plot(best.r, best.rms, marker="o", markersize=15, markerfacecolor="none",
+                    markeredgecolor=INK, markeredgewidth=1.4, zorder=6)
+        ax.set_title(f"order {order}")
+        _log2_steps(ax, sorted(table.r.unique()))
+        ax.set_ylim(0, 1.05 * (table.rms + table.rms_std).max())
+        ax.set_xlabel("Trotter steps r")
+    np.atleast_1d(axes)[0].set_ylabel("RMS error of local ⟨P⟩")
+    handles = _style_handles([("-", "o", "device noise model"), ("--", None, "noiseless (Trotter only)")])
+    handles.append(Line2D([], [], color=INK, marker="o", linestyle=":", label="IBM device"))
+    fig.legend(handles=handles, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.04))
+    if title:
+        fig.suptitle(title)
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    if save:
+        fig.savefig(save, dpi=200, bbox_inches="tight")
+    return fig

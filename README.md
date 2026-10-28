@@ -9,7 +9,7 @@ gate error rate. It also checks how loose standard Trotter error bounds are
 ([Childs et al., 2021](https://arxiv.org/abs/1912.08854)).
 
 **Read the results:** [`notebooks/trotter_under_noise.ipynb`](notebooks/trotter_under_noise.ipynb).
-Simulation results (questions 1 and 2) are complete; the real-device check (question 3) is pending.
+Questions 1 to 3 are complete, including one run on an IBM device.
 
 ## Results so far
 
@@ -24,9 +24,13 @@ Simulation results (questions 1 and 2) are complete; the real-device check (ques
   all 45 configurations.
 - **Order.** With grouped terms, second order costs the same two-qubit gates as first and wins
   everywhere; fourth order (5× the gates) loses everywhere at today's error rates.
+- **Hardware.** On `ibm_kingston` (12-qubit chain, 18 circuits, 92 s of device time) the optimum
+  falls where the device's own noise model puts it, r\* = 8 at first order and 6–8 at second, and
+  the model tracks the device's error to within 0.01 at every r.
 
 ![Total error versus Trotter steps under device noise](figures/fig2_noisy_tradeoff.png)
 ![Predicted versus measured optimal step count](figures/fig3_predictions.png)
+![The same trade-off on ibm_kingston](figures/fig4_hardware.png)
 
 ## Layout
 
@@ -46,6 +50,8 @@ pip install -r requirements.txt     # GPU: swap qiskit-aer for qiskit-aer-gpu
 python tests/test_core.py
 python scripts/run_noiseless.py     # question 1, ~20 min on a workstation CPU
 python scripts/run_noisy.py         # question 2, ~40 min with a GPU
+python scripts/run_hardware.py dry-run   # question 3 on a device's noise model (needs IBM credentials)
+python scripts/run_hardware.py submit    # then `fetch`; uses about 1.5 min of device time
 ```
 
 ## Design notes

@@ -27,3 +27,16 @@ noisy:
   seed: 1
   device: auto              # GPU if this Aer build can use it, else CPU
   precision: double
+
+# Question 3: one chain on a real device and on that device's own noise model.
+hardware:
+  backend: ibm_kingston     # lowest per-step error of the Open-plan devices in the dry run
+  model: tfim
+  n: 12
+  t: 2.0
+  orders: [1, 2]
+  steps: [1, 2, 3, 4, 6, 8, 12, 16, 24]
+  shots: 8192
+  resilience_level: 1       # readout mitigation (TREX) only; no gate-noise mitigation
+  optimization_level: 2
+  seed: 1
