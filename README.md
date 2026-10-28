@@ -8,7 +8,8 @@ predictions, [Knee & Munro (2015)](https://arxiv.org/abs/1502.04536) and
 gate error rate. It also checks how loose standard Trotter error bounds are
 ([Childs et al., 2021](https://arxiv.org/abs/1912.08854)).
 
-**Read the results:** [`notebooks/trotter_under_noise.ipynb`](notebooks/trotter_under_noise.ipynb).
+**Read the results:** the 4-page write-up ([PDF](writeup/writeup.pdf), [Markdown](writeup/writeup.md)) or the
+full notebook, [`notebooks/trotter_under_noise.ipynb`](notebooks/trotter_under_noise.ipynb).
 Questions 1 to 3 are complete, including one run on an IBM device.
 
 ## Results so far
@@ -40,7 +41,8 @@ Questions 1 to 3 are complete, including one run on an IBM device.
 | `scripts/` | Sweeps that write `results/*.csv`, plus `gpu_check.py` |
 | `config.yaml` | Every sweep setting; the notebook rebuilds all figures from the CSVs |
 | `tests/` | Consistency checks (`python tests/test_core.py`) |
-| `notebooks/` | The write-up as a notebook |
+| `notebooks/` | The full analysis as a notebook |
+| `writeup/` | 4-page write-up (Markdown source and PDF) |
 
 ## Reproduce
 
