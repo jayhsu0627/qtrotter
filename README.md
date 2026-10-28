@@ -75,3 +75,7 @@ python scripts/run_hardware.py submit    # then `fetch`; uses about 1.5 min of d
   the exact exponential, so it reports zero Trotter error.
 - **Noise model.** FakeTorino calibration through Qiskit Aer, density-matrix method,
   optimization level 2, ALAP scheduling so idle qubits decohere, one fixed qubit layout per chain.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

@@ -2,6 +2,7 @@
 name = "qtrotter"
 version = "0.1.0"
 description = "Optimal Trotter step count under IBM device noise: reproduction and test of analytic predictions"
+license = "MIT"
 requires-python = ">=3.11"
 dependencies = ["qiskit>=2.5", "qiskit-aer>=0.18", "qiskit-ibm-runtime>=0.51", "numpy>=2", "scipy", "matplotlib", "pandas", "pyyaml"]
 
