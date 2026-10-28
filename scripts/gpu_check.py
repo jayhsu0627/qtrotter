@@ -26,10 +26,14 @@ PRECISION = "double"                                # "single" halves memory
 
 
 def tfim(n, J=1.0, h=1.0):
-    """Open transverse-field Ising chain: -J sum Z_i Z_{i+1} - h sum X_i."""
-    terms = [("ZZ", [i, i + 1], -J) for i in range(n - 1)]
-    terms += [("X", [i], -h) for i in range(n)]
-    return SparsePauliOp.from_sparse_list(terms, num_qubits=n)
+    """Open transverse-field Ising chain, -J sum Z_i Z_{i+1} - h sum X_i, as [X field, ZZ bonds].
+
+    Passed as a list, the X field sits outermost and its half-steps merge between Trotter steps.
+    Passed as one operator, the ZZ bonds end up outermost and second order costs ~1.7x the gates.
+    """
+    x = SparsePauliOp.from_sparse_list([("X", [i], -h) for i in range(n)], num_qubits=n)
+    zz = SparsePauliOp.from_sparse_list([("ZZ", [i, i + 1], -J) for i in range(n - 1)], num_qubits=n)
+    return [x, zz]
 
 
 # 1. Does this Aer build see a GPU, and can it run a kernel on it?
@@ -57,9 +61,10 @@ gb = 4**N * (16 if PRECISION == "double" else 8) / 1e9
 print(f"{N} qubits, {PRECISION} precision: density matrix needs {gb:.3g} GB (96 GB on the card)")
 
 # 3. One noisy run: second-order Trotter, IBM Torino noise model.
-H = tfim(N)
+groups = tfim(N)
+H = groups[0] + groups[1]
 qc = QuantumCircuit(N)
-qc.append(PauliEvolutionGate(H, time=T, synthesis=SuzukiTrotter(order=2, reps=STEPS)), range(N))
+qc.append(PauliEvolutionGate(groups, time=T, synthesis=SuzukiTrotter(order=2, reps=STEPS)), range(N))
 backend = FakeTorino()
 tqc = transpile(qc, backend, optimization_level=1, seed_transpiler=1)
 q0 = tqc.layout.final_index_layout()[0]  # physical qubit holding chain site 0

@@ -8,7 +8,9 @@ probability p per step, distance = diamond norm, d >> 1:
     D(r) = (1 - p) A t^2 / (2 r) + 2 p r,
 where A is the diamond norm of rho -> [C, rho] with C = sum_{j<l} [H_j, H_l]; for C = [A, B]
 that is the spectral spread of i[A, B]. Their general form D = C / r^(s-1) + D r also covers
-higher orders; for p = 2 we feed it our commutator bound (doubled: diamond <= 2 x spectral).
+higher orders, but they evaluate the constants only at first order. Our second-order extension
+feeds it Childs et al.'s commutator bound (doubled: diamond <= 2 x spectral). Below, both terms are
+halved to trace-distance units, which leaves r* unchanged.
 
 Avtandilyan & Pogosov (arXiv:2405.01131), TFIM with K = 2N - 1 exponentials per step, each
 failing with probability P0 (total gate error b r, b = K P0 at first order):
@@ -28,13 +30,17 @@ def optimum(a, q, b):
     return (q * a / b) ** (1 / (q + 1))
 
 
-def knee_munro(order, t, p_step, norms):
+def knee_munro_constant(order, t, p_step, norms):
+    """Knee & Munro's Trotter constant a (term a / r^order), in trace-distance units."""
     if order == 1:
-        return optimum((1 - p_step) * norms["spread_AB"] * t**2 / 2, 1, 2 * p_step)
+        return (1 - p_step) * norms["spread_AB"] * t**2 / 4
     if order == 2:
-        c2 = norms["comm_BBA"] / 12 + norms["comm_AAB"] / 24
-        return optimum(2 * t**3 * c2, 2, 2 * p_step)
+        return t**3 * (norms["comm_BBA"] / 12 + norms["comm_AAB"] / 24)
     return np.nan
+
+
+def knee_munro(order, t, p_step, norms):
+    return optimum(knee_munro_constant(order, t, p_step, norms), order, p_step)
 
 
 def avtandilyan_pogosov(order, t, p_step, n, J=1.0, h=1.0):
@@ -58,8 +64,66 @@ def semi_empirical(r, trotter_err, p_step):
     failures are treated as independent of it: the output is right only if neither happened.
     """
     r, trotter_err = np.asarray(r, float), np.asarray(trotter_err, float)
-    total = 1 - (1 - trotter_err) * np.exp(-p_step * r)
+    total = 1 - (1 - np.minimum(trotter_err, 1)) * np.exp(-p_step * r)
     return r[np.argmin(total)]
+
+
+def fitted_trotter_constant(r, trotter_err, order, below=0.5):
+    """C in E_T(r) ~ C / r^order, fitted in log space to the points below saturation."""
+    r, trotter_err = np.asarray(r, float), np.asarray(trotter_err, float)
+    keep = (trotter_err < below) & (trotter_err > 1e-10)
+    return float(np.exp(np.mean(np.log(trotter_err[keep]) + order * np.log(r[keep]))))
+
+
+def min_rise(err):
+    """How far the error rises above its minimum on the flatter side (inf on a side with no points).
+
+    A small value means the curve is flat around r* and the measured optimum is not resolved.
+    """
+    err = np.asarray(err, float)
+    i = np.argmin(err)
+    left = err[:i].max() - err[i] if i > 0 else np.inf
+    right = err[i + 1:].max() - err[i] if i < len(err) - 1 else np.inf
+    return min(left, right)
+
+
+def ablation(noisy, noiseless, metric="trace_dist", r_max=400):
+    """Which change fixes the analytic r*: the Trotter term, or how it is combined with noise?
+
+    Three Trotter terms (Knee & Munro's a / r^q; this state's C / r^q, with C fitted to its
+    noiseless error; that error E_T(r) itself) times two combination rules (additive, term + p r,
+    as in both papers; saturating, 1 - (1 - term) exp(-p r)). The power-law terms are minimized
+    over a fine r axis, E_T over the simulated grid.
+    """
+    norm_cols = ["spread_AB", "comm_AAB", "comm_BBA"]
+    norms = noiseless.groupby(["model", "n"])[norm_cols].first()
+    fine = np.linspace(1, r_max, 100 * r_max)
+    rows = []
+    for (model, n, t, order), g in noisy.groupby(["model", "n", "t", "order"]):
+        g = g.sort_values("r")
+        r, err, et = g.r.to_numpy(float), g[metric].to_numpy(), g[f"trotter_{metric}"].to_numpy()
+        p_step = per_step_error(r, g.gate_error_sum)
+        c_fit = fitted_trotter_constant(r, et, order)
+        a_km = knee_munro_constant(order, t, p_step, norms.loc[(model, n)].to_dict())
+        row = {"model": model, "n": n, "t": t, "order": order, "r_measured": r[np.argmin(err)],
+               "a_knee_munro": a_km, "c_fitted": c_fit}
+        for name, c in [("knee_munro", a_km), ("fitted", c_fit)]:
+            row[f"{name} additive"] = optimum(c, order, p_step)
+            row[f"{name} saturating"] = (np.nan if np.isnan(c) else
+                                         semi_empirical(fine, c / fine**order, p_step))
+        row["E_T additive"] = r[np.argmin(et + p_step * r)]
+        row["E_T saturating"] = semi_empirical(r, et, p_step)
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def damped_rms(trotter_values, exact_values, p_step, r):
+    """RMS local-observable error if noise shrinks every expectation value by exp(-p_step r).
+
+    The observable version of semi_empirical: the same global-depolarizing assumption.
+    """
+    damped = np.exp(-p_step * r) * np.asarray(trotter_values, float)
+    return float(np.sqrt(np.mean((damped - np.asarray(exact_values, float)) ** 2)))
 
 
 def summarize(noisy, noiseless, metric="trace_dist"):
@@ -74,7 +138,7 @@ def summarize(noisy, noiseless, metric="trace_dist"):
         rows.append({
             "model": model, "n": n, "t": t, "order": order,
             "p_step": p_step, "twoq_per_step": np.polyfit(g.r, g.two_qubit_gates, 1)[0],
-            "r_measured": best.r, "err_at_optimum": best[metric],
+            "r_measured": best.r, "err_at_optimum": best[metric], "min_rise": min_rise(g[metric]),
             "r_semi_empirical": semi_empirical(g.r, g[f"trotter_{metric}"], p_step),
             "r_knee_munro": knee_munro(order, t, p_step, norms.loc[(model, n)].to_dict()),
             "r_avtandilyan_pogosov": (avtandilyan_pogosov(order, t, p_step, n)

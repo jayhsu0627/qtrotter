@@ -19,15 +19,22 @@ Questions 1 to 3 are complete, including one run on an IBM device.
   and 10⁵–10⁸× at order 4, growing with n. Both reproduce Childs et al. on TFIM and XXZ chains.
 - **Optimal step count.** Under the FakeTorino noise model, the measured r\* ranges from 1 to 16
   and grows with evolution time. Knee & Munro's prediction overshoots it by a median 2.4×,
-  Avtandilyan & Pogosov's by 3.7×.
-- **Why.** Both formulas use a worst-case Trotter term. Keeping the calibrated gate errors but
-  using the initial state's actual noiseless Trotter error predicts r\* within one grid step in
-  all 45 configurations.
-- **Order.** With grouped terms, second order costs the same two-qubit gates as first and wins
-  everywhere; fourth order (5× the gates) loses everywhere at today's error rates.
+  Avtandilyan & Pogosov's by 3.7× (orders 1 and 2; Knee & Munro's second order is our extension
+  of their general form).
+- **Why.** An ablation pins it on the Trotter term: the analytic constant exceeds the initial
+  state's actual one by a median 15× (first order) and 9× (second), and swapping only that
+  constant removes the overshoot, while changing only how the errors combine does not. Keeping
+  the calibrated gate errors but using the state's noiseless Trotter error predicts r\* within one
+  grid step in all 42 configurations with a clear minimum.
+- **Order.** With two groups of terms, second order's outer half-steps merge (standard Strang
+  splitting), so it costs the same two-qubit gates as first and wins everywhere. That overturns
+  Avtandilyan & Pogosov's preference for first order, whose cost model charges second order double.
+  Fourth order (5× the gates) loses everywhere at today's error rates.
 - **Hardware.** On `ibm_kingston` (12-qubit chain, 18 circuits, 92 s of device time) the optimum
   falls where the device's own noise model puts it, r\* = 8 at first order and 6–8 at second, and
-  the model tracks the device's error to within 0.01 at every r.
+  the model tracks the device's error to within 0.01 at every r. The semi-empirical predictor,
+  adapted to observables, lands one grid step low (6 and 4), because local observables decay
+  several times more slowly than the global damping it assumes.
 
 ![Total error versus Trotter steps under device noise](figures/fig2_noisy_tradeoff.png)
 ![Predicted versus measured optimal step count](figures/fig3_predictions.png)
@@ -42,7 +49,7 @@ Questions 1 to 3 are complete, including one run on an IBM device.
 | `config.yaml` | Every sweep setting; the notebook rebuilds all figures from the CSVs |
 | `tests/` | Consistency checks (`python tests/test_core.py`) |
 | `notebooks/` | The full analysis as a notebook |
-| `writeup/` | 4-page write-up (Markdown source and PDF) |
+| `writeup/` | 4-page write-up (Markdown source and PDF; `build.sh` rebuilds the PDF) |
 
 ## Reproduce
 
