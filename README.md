@@ -63,10 +63,12 @@ Questions 1 to 3 are complete, including one run on an IBM device, plus follow-u
   sites (4 and 3 steps at t = 1, first and second order).
 - **100 qubits on a device (follow-up, pre-registered).** Patches under `ibm_fez`'s calibration predicted r\* for a
   100-qubit chain before the run (commit d6c2c04). The test failed: the device's r\* was within one grid step in 1 of
-  4 cases, and its error was 3–5× the prediction, mostly on X-type observables, a phase error the calibrated noise
-  model does not contain. Because that excess barely depends on r, running at the predicted r would still have cost at
-  most 0.005 over the device's best (a comparison made after the run), against up to 0.20 for the whole-chain damping
-  estimate. 98 s of device time.
+  4 cases, and its error was 3–5× the prediction (98 s of device time). The cause was our circuits: listed in chain
+  order, the TFIM's ZZ bonds ran as one serial staircase, about 20 µs of idle per circuit whatever r, which 10-site
+  patches do not have. The qubits that idled longest picked up phase errors (⟨X_i⟩ changed sign on 14 sites). With
+  the bonds in two layers (same unitary, same gates), a second pre-registered run on the same qubits passed (commit
+  dca91f3, 42 s): r\* within one grid step at both orders, error at the predicted r\* 0.08–0.10 against 0.21 before,
+  still 1.4–2.4× the prediction.
 
 ![Total error versus Trotter steps under device noise](figures/fig2_noisy_tradeoff.png)
 ![Predicted versus measured optimal step count](figures/fig3_predictions.png)
@@ -75,6 +77,7 @@ Questions 1 to 3 are complete, including one run on an IBM device, plus follow-u
 ![Where the noise that reaches a local observable comes from](figures/fig6_noise_reach.png)
 ![Light-cone patches against full simulations, and r* against chain length](figures/fig7_patches.png)
 ![A 100-qubit chain on ibm_fez against the predictions made before the run](figures/fig8_fez_100q.png)
+![The same chain with layered circuits](figures/fig9_fez_layered.png)
 
 ## Layout
 
@@ -111,6 +114,8 @@ python scripts/run_noisy.py config.yaml local_xxz       # the XXZ chain, ~2-3 h 
 python scripts/run_noise_response.py config.yaml noise_response_xxz
 python scripts/run_hardware_long.py dry-run             # 100-qubit layout and predictions (no QPU time)
 python scripts/run_hardware_long.py submit              # then `fetch`; used 98 s of device time
+python scripts/run_hardware_long.py dry-run hardware_long_layered   # the rerun with layered circuits; then
+python scripts/run_hardware_long.py submit hardware_long_layered    # `fetch hardware_long_layered`; 42 s
 ```
 
 ## Design notes
@@ -118,6 +123,12 @@ python scripts/run_hardware_long.py submit              # then `fetch`; used 98 
 - **Term grouping.** Each Hamiltonian is passed to `PauliEvolutionGate` as groups of commuting
   terms, `[X field, ZZ bonds]` for the TFIM. Passed as one operator, Qiskit's second-order
   formula costs 1.7 to 1.9 times the two-qubit gates of first order and about 5 times the depth.
+- **Layer each group.** The terms of a group commute, so their order does not change the unitary, but it sets the
+  schedule. Listed in chain order, the TFIM's ZZ bonds each share a qubit with the next and run one after another:
+  about 0.2 µs per bond, 20 µs at 100 sites, with every site idling in a superposition for part of it.
+  `trotter_circuit` therefore reorders each group into layers of disjoint support (`circuits.layered`: even bonds,
+  then odd bonds). Results before the 100-qubit rerun were produced in chain order (2 µs of staircase at 12 sites,
+  which the noise model includes); `trotter_circuit(..., layer=False)` rebuilds those circuits.
 - **A hidden identity.** Second-order Trotter with the ZZ group outermost equals first-order
   Trotter conjugated by a half-step of ZZ. From |0...0>, Z-type observables then cannot tell the
   two orders apart (`tests/test_core.py` checks this). The X-outer grouping avoids it.

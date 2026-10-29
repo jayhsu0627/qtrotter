@@ -352,10 +352,11 @@ def patch_check(check, by_length, grid, save=None):
     return fig
 
 
-def hardware_long(table, title="", save=None):
-    """Figure 8: RMS error of local observables on a long chain of a device, against the
+def hardware_long(table, title="", save=None, earlier=None, earlier_label=""):
+    """Figures 8-9: RMS error of local observables on a long chain of a device, against the
     predictions made before the run. `table` has columns t, source, order, r, rms, rms_std, with
-    sources "hardware", "patches", "global_damping" and "trotter"; rows of panels are t."""
+    sources "hardware", "patches", "global_damping" and "trotter"; rows of panels are t.
+    `earlier`: another run's table, whose device curve is drawn in grey for comparison."""
     style()
     times, orders = sorted(table.t.unique()), sorted(table.order.unique())
     fig, axes = plt.subplots(len(times), len(orders), figsize=(4.4 * len(orders), 3.2 * len(times)),
@@ -369,6 +370,11 @@ def hardware_long(table, title="", save=None):
             ax.plot(line("trotter").r, line("trotter").rms, color=c, linestyle="--")
             ax.plot(line("global_damping").r, line("global_damping").rms, color=INK_2, linestyle="-.",
                     linewidth=1.1)
+            if earlier is not None:
+                old = earlier[(earlier.t == t) & (earlier.order == order) & (earlier.source == "hardware")
+                              & earlier.r.between(table.r.min(), table.r.max())].sort_values("r")
+                ax.plot(old.r, old.rms, color=INK_2, marker=mk, markersize=5, markerfacecolor="none",
+                        linestyle=":", linewidth=1.0, zorder=4)
             dev = line("hardware")
             ax.errorbar(dev.r, dev.rms, yerr=dev.rms_std, color=INK, marker=mk, markersize=6,
                         linestyle=":", linewidth=1.2, capsize=2, zorder=5)
@@ -384,7 +390,11 @@ def hardware_long(table, title="", save=None):
                               ("--", None, "noiseless (Trotter only)")])
     handles += [Line2D([], [], color=INK_2, linestyle="-.", label="global damping (question 3)"),
                 Line2D([], [], color=INK, marker="o", linestyle=":", label="IBM device")]
-    fig.legend(handles=handles, loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.06))
+    if earlier is not None:
+        handles.append(Line2D([], [], color=INK_2, marker="o", markerfacecolor="none", linestyle=":",
+                              label=earlier_label))
+    fig.legend(handles=handles, loc="lower center", ncol=2,
+               bbox_to_anchor=(0.5, -0.06 if len(times) > 1 else -0.14))
     if title:
         fig.suptitle(title)
     fig.tight_layout(rect=(0, 0.06, 1, 1))
