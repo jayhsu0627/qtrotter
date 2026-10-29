@@ -10,7 +10,7 @@ gate error rate. It also checks how loose standard Trotter error bounds are
 
 **Read the results:** the 4-page write-up ([PDF](writeup/writeup.pdf), [Markdown](writeup/writeup.md)) or the
 full notebook, [`notebooks/trotter_under_noise.ipynb`](notebooks/trotter_under_noise.ipynb).
-Questions 1 to 3 are complete, including one run on an IBM device.
+Questions 1 to 3 are complete, including one run on an IBM device, plus two follow-ups in section 5 of the notebook.
 
 ## Results so far
 
@@ -35,10 +35,22 @@ Questions 1 to 3 are complete, including one run on an IBM device.
   the model tracks the device's error to within 0.01 at every r. The semi-empirical predictor,
   adapted to observables, lands one grid step low (6 and 4), because local observables decay
   several times more slowly than the global damping it assumes.
+- **Better devices (follow-up).** With every Torino error rate scaled down by up to 100× (10-qubit
+  TFIM), second order beats first at every level, and fourth order overtakes second only once errors
+  are 23–31× lower, more than the order of magnitude Avtandilyan & Pogosov estimate. The
+  semi-empirical predictor, run before these simulations (`results/noise_scaling_predicted.csv`),
+  placed r\* within one grid step in all 45 configurations and picked the better order in 14 of 15.
+  Both analytic formulas overshoot by the same factor at every noise level: their power law is right,
+  their constant is not.
+- **Second model (follow-up).** The XXZ chain under the same noise (4–10 qubits) repeats the
+  pattern: Knee & Munro overshoot by 2.9× and 2.4× because their constant is 12× and 9× too large,
+  and the semi-empirical predictor lands within one grid step in 30 of 31 configurations with a clear
+  minimum.
 
 ![Total error versus Trotter steps under device noise](figures/fig2_noisy_tradeoff.png)
 ![Predicted versus measured optimal step count](figures/fig3_predictions.png)
 ![The same trade-off on ibm_kingston](figures/fig4_hardware.png)
+![The trade-off on uniformly better devices](figures/fig5_noise_scaling.png)
 
 ## Layout
 
@@ -61,6 +73,9 @@ python scripts/run_noiseless.py     # question 1, ~20 min on a workstation CPU
 python scripts/run_noisy.py         # question 2, ~40 min with a GPU
 python scripts/run_hardware.py dry-run   # question 3 on a device's noise model (needs IBM credentials)
 python scripts/run_hardware.py submit    # then `fetch`; uses about 1.5 min of device time
+python scripts/run_noisy.py config.yaml noisy_xxz       # follow-up: XXZ under noise, ~26 min on 8 CPU cores
+python scripts/predict_noise_scaling.py                 # follow-up: predictions, made without the sweep below
+python scripts/run_noisy.py config.yaml noise_scaling   # follow-up: better devices, ~70 min on 8 CPU cores
 ```
 
 ## Design notes
@@ -73,6 +88,10 @@ python scripts/run_hardware.py submit    # then `fetch`; uses about 1.5 min of d
   two orders apart (`tests/test_core.py` checks this). The X-outer grouping avoids it.
 - **Synthesize before simulating.** `Statevector` on an unsynthesized `PauliEvolutionGate` uses
   the exact exponential, so it reports zero Trotter error.
+- **Read out through the density matrix.** In Aer 0.18, `save_expectation_value` on a transpiled
+  circuit whose chain is scattered over the device can return wrong values once Aer drops the idle
+  qubits (0.000 or −0.078 where the exact value is 0.356). `save_density_matrix` on the chain
+  qubits, used throughout, matches the exact state to 10⁻¹³.
 - **Noise model.** FakeTorino calibration through Qiskit Aer, density-matrix method,
   optimization level 2, ALAP scheduling so idle qubits decohere, one fixed qubit layout per chain.
 

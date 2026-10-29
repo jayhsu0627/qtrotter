@@ -197,3 +197,50 @@ def hardware_comparison(table, title="", save=None):
     if save:
         fig.savefig(save, dpi=200, bbox_inches="tight")
     return fig
+
+
+def noise_scaling(summary, predicted, times, thresholds=(), save=None):
+    """Figure 5: the trade-off on uniformly better devices (every error rate times a scale).
+
+    Top: the lowest error over r, per order, so the lowest line is the order to use. Bottom:
+    measured r* (markers) and the semi-empirical prediction made before the sweep ran (lines).
+    `thresholds` is a list of (scale, label) drawn as vertical guides.
+    """
+    style()
+    scales = sorted(summary.noise_scale.unique(), reverse=True)
+    fig, axes = plt.subplots(2, len(times), figsize=(4.1 * len(times), 6.4), sharex=True,
+                             sharey="row")
+    for j, t in enumerate(times):
+        top, bottom = axes[0, j], axes[1, j]
+        for order, g in summary[summary.t == t].groupby("order"):
+            g = g.sort_values("noise_scale")
+            c, mk = ORDER_COLOR[order], ORDER_MARKER[order]
+            top.plot(g.noise_scale, g.err_at_optimum, color=c, marker=mk)
+            bottom.plot(g.noise_scale, g.r_measured, color=c, marker=mk, linestyle="")
+            p = predicted[(predicted.t == t) & (predicted.order == order)].sort_values("noise_scale")
+            bottom.plot(p.noise_scale, p.r_predicted, color=c, linestyle="--")
+        for ax in (top, bottom):
+            for scale, label in thresholds:
+                ax.axvline(scale, color=INK_2, linewidth=0.8, linestyle=":")
+                if ax is top:
+                    ax.text(scale, 1.0, f" {label}", color=INK_2, fontsize=8, va="top",
+                            transform=ax.get_xaxis_transform())
+            ax.set_xscale("log")
+            ax.set_xticks(scales)
+            ax.set_xticklabels([f"{s:g}" for s in scales])
+            ax.minorticks_off()
+            ax.set_xlim(max(scales) * 1.4, min(scales) / 1.4)  # better devices to the right
+        top.set_yscale("log")
+        top.set_title(f"n = {int(summary.n.iloc[0])}, t = {t:g}")
+        bottom.set_yscale("log", base=2)
+        bottom.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:g}"))
+        bottom.set_xlabel("error rates × scale  (1 = FakeTorino)")
+    axes[0, 0].set_ylabel("lowest trace distance over r")
+    axes[1, 0].set_ylabel("optimal steps r*")
+    handles = _order_handles(sorted(summary.order.unique())) + _style_handles(
+        [("", "o", "simulated r*"), ("--", None, "predicted before the sweep")])
+    fig.legend(handles=handles, loc="lower center", ncol=5, bbox_to_anchor=(0.5, -0.03))
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    if save:
+        fig.savefig(save, dpi=200, bbox_inches="tight")
+    return fig

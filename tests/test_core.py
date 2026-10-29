@@ -82,6 +82,27 @@ def test_device_pipeline_without_noise_reproduces_numpy():
         assert abs(np.trace(noisy) - 1) < 1e-6 and np.real(np.vdot(psi, noisy @ psi)) < 1 - 1e-4
 
 
+def test_scaled_backend():
+    from qiskit_ibm_runtime.fake_provider import FakeTorino
+    from qtrotter.circuits import gate_error_sum
+    from qtrotter.noisy import density_matrix, noisy_simulator, scaled_backend
+
+    backend = FakeTorino()
+    t1 = backend.target.qubit_properties[0].t1
+    model = tfim(4)
+    tqc = device_circuit(trotter_circuit(model, 2, 3, 0.9), backend, choose_layout(model, backend))
+    psi = Propagator(model).trotter_state(2, 3, 0.9)
+    infidelity = {}
+    for scale in (1, 0.1, 1e-6):
+        scaled = scaled_backend(backend, scale)
+        assert np.isclose(gate_error_sum(tqc, scaled), scale * gate_error_sum(tqc, backend))
+        assert np.isclose(scaled.target.qubit_properties[0].t1, t1 / scale)
+        rho = density_matrix(tqc, noisy_simulator(scaled))
+        infidelity[scale] = 1 - np.real(np.vdot(psi, rho @ psi))
+    assert backend.target.qubit_properties[0].t1 == t1  # the original is not modified
+    assert infidelity[1e-6] < 1e-5 and 0.05 < infidelity[0.1] / infidelity[1] < 0.2, infidelity
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

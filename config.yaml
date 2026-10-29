@@ -28,6 +28,41 @@ noisy:
   device: auto              # GPU if this Aer build can use it, else CPU
   precision: double
 
+# Follow-up: the same trade-off on uniformly better devices (every error rate times a scale), to
+# test Avtandilyan & Pogosov's claim that higher orders pay off at about 10x lower gate error.
+# Scale 1 repeats Question 2 at n = 10.  python scripts/run_noisy.py config.yaml noise_scaling
+noise_scaling:
+  backend: FakeTorino
+  noise_scales: [1.0, 0.3, 0.1, 0.03, 0.01]
+  models: [tfim]
+  sizes: [10]
+  times: [1.0, 2.0, 4.0]
+  orders: [1, 2, 4]
+  steps: [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192]
+  max_steps: {1: 192, 2: 128, 4: 32}   # about 2-3x the largest predicted r* per order
+  optimization_level: 2
+  schedule: true
+  seed: 1
+  device: CPU
+  precision: double
+  output: noise_scaling.csv
+
+# Follow-up: the XXZ chain under the same noise model (Question 2 used only the TFIM).
+#   python scripts/run_noisy.py config.yaml noisy_xxz
+noisy_xxz:
+  backend: FakeTorino
+  models: [xxz]
+  sizes: [4, 6, 8, 10]
+  times: [1.0, 2.0, 4.0]
+  orders: [1, 2, 4]
+  steps: [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24, 32, 48]
+  optimization_level: 2
+  schedule: true
+  seed: 1
+  device: CPU
+  precision: double
+  output: noisy_xxz.csv
+
 # Question 3: one chain on a real device and on that device's own noise model.
 hardware:
   backend: ibm_kingston     # lowest per-step error of the Open-plan devices in the dry run
