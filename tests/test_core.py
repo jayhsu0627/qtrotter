@@ -142,6 +142,19 @@ def test_patches():
     assert max(abs(whole.exact(0.9)[k] - exact[k]) for k in exact) < 1e-12
 
 
+def test_longest_path():
+    """A 7-site line with a 2-site branch off site 3: the longest simple path is the line."""
+    from qtrotter.hardware import longest_path
+
+    edges = [(i, i + 1) for i in range(6)] + [(3, 7), (7, 8)]
+    graph = {q: set() for q in range(9)}
+    for a, b in edges:
+        graph[a].add(b)
+        graph[b].add(a)
+    path = longest_path(graph, restarts=20)
+    assert len(path) == 7 and all(b in graph[a] for a, b in zip(path, path[1:])), path
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

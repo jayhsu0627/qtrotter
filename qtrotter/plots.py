@@ -350,3 +350,44 @@ def patch_check(check, by_length, grid, save=None):
     if save:
         fig.savefig(save, dpi=200, bbox_inches="tight")
     return fig
+
+
+def hardware_long(table, title="", save=None):
+    """Figure 8: RMS error of local observables on a long chain of a device, against the
+    predictions made before the run. `table` has columns t, source, order, r, rms, rms_std, with
+    sources "hardware", "patches", "global_damping" and "trotter"; rows of panels are t."""
+    style()
+    times, orders = sorted(table.t.unique()), sorted(table.order.unique())
+    fig, axes = plt.subplots(len(times), len(orders), figsize=(4.4 * len(orders), 3.2 * len(times)),
+                             sharex=True, sharey=True, squeeze=False)
+    for i, t in enumerate(times):
+        for j, order in enumerate(orders):
+            ax, c, mk = axes[i, j], ORDER_COLOR[order], ORDER_MARKER[order]
+            g = table[(table.t == t) & (table.order == order)]
+            line = lambda src: g[g.source == src].sort_values("r")
+            ax.plot(line("patches").r, line("patches").rms, color=c, marker=mk)
+            ax.plot(line("trotter").r, line("trotter").rms, color=c, linestyle="--")
+            ax.plot(line("global_damping").r, line("global_damping").rms, color=INK_2, linestyle="-.",
+                    linewidth=1.1)
+            dev = line("hardware")
+            ax.errorbar(dev.r, dev.rms, yerr=dev.rms_std, color=INK, marker=mk, markersize=6,
+                        linestyle=":", linewidth=1.2, capsize=2, zorder=5)
+            best = dev.loc[dev.rms.idxmin()]
+            ax.plot(best.r, best.rms, marker="o", markersize=15, markerfacecolor="none",
+                    markeredgecolor=INK, markeredgewidth=1.4, zorder=6)
+            ax.set_title(f"t = {t:g}, order {order}")
+            _log2_steps(ax, sorted(table.r.unique()))
+            if i == len(times) - 1:
+                ax.set_xlabel("Trotter steps r")
+        axes[i, 0].set_ylabel("RMS error of local ⟨P⟩")
+    handles = _style_handles([("-", "o", "patches (predicted before the run)"),
+                              ("--", None, "noiseless (Trotter only)")])
+    handles += [Line2D([], [], color=INK_2, linestyle="-.", label="global damping (question 3)"),
+                Line2D([], [], color=INK, marker="o", linestyle=":", label="IBM device")]
+    fig.legend(handles=handles, loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.06))
+    if title:
+        fig.suptitle(title)
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    if save:
+        fig.savefig(save, dpi=200, bbox_inches="tight")
+    return fig

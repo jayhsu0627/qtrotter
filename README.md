@@ -49,16 +49,24 @@ Questions 1 to 3 are complete, including one run on an IBM device, plus follow-u
   pattern: Knee & Munro overshoot by 2.9× and 2.4× because their constant is 12× and 9× too large,
   and the semi-empirical predictor lands within one grid step in 30 of 31 configurations with a clear
   minimum.
-- **Local observables (follow-up).** For the RMS error of every local Pauli (6–12 qubits, five noise levels), r\* is
-  within about 15% of the state's and stops depending on the chain length once the chain is longer than the light
-  cone. Noise on a single site reaches a central observable only from within about v t sites, at every r from 4 to
-  64, so the noise term grows linearly in r: at second order r\* scales as γ^−1/3, not as the γ^−1/4 of
-  [Trivedi & Cirac (2025)](https://arxiv.org/abs/2509.17579)'s bound, which counts the whole circuit light cone.
-  Fourth order never beats second on local observables, even with every error rate 100× lower.
+- **Local observables (follow-up).** For the RMS error of every local Pauli (TFIM and XXZ, 6–12 qubits, five noise
+  levels), r\* is close to the state's (within about 15%, except up to 1.6× at first order on the XXZ chain) and on the
+  TFIM stops depending on the chain length once the chain is longer than the light cone. Noise on a single site
+  reaches a central observable only from within about v t sites, at every r from 4 to 64, so the noise term grows
+  linearly in r: r\* scales as γ^−1/(q+1) (γ^−1/3 at second order on both chains, γ^−0.47 at first order on the XXZ
+  chain), not as the γ^−1/(q+2) of [Trivedi & Cirac (2025)](https://arxiv.org/abs/2509.17579)'s bound, which counts
+  the whole circuit light cone. Whether fourth order pays off for local observables depends on the model: never on
+  the TFIM even with every error rate 100× lower, from 10–30× lower on the XXZ chain.
 - **Long chains (follow-up).** Light-cone patches, sub-chains of w sites simulated on the chain's own qubits, give r\*
   for local observables at the cost of a w-qubit simulation. 10-site patches match the full 12-site simulation for
   t ≤ 2 and noisy trajectories of a 20-qubit chain, and on a 96-qubit Torino chain they put r\* where it is at 12
   sites (4 and 3 steps at t = 1, first and second order).
+- **100 qubits on a device (follow-up, pre-registered).** Patches under `ibm_fez`'s calibration predicted r\* for a
+  100-qubit chain before the run (commit d6c2c04). The test failed: the device's r\* was within one grid step in 1 of
+  4 cases, and its error was 3–5× the prediction, mostly on X-type observables, a phase error the calibrated noise
+  model does not contain. Because that excess barely depends on r, running at the predicted r would still have cost at
+  most 0.005 over the device's best (a comparison made after the run), against up to 0.20 for the whole-chain damping
+  estimate. 98 s of device time.
 
 ![Total error versus Trotter steps under device noise](figures/fig2_noisy_tradeoff.png)
 ![Predicted versus measured optimal step count](figures/fig3_predictions.png)
@@ -66,6 +74,7 @@ Questions 1 to 3 are complete, including one run on an IBM device, plus follow-u
 ![The trade-off on uniformly better devices](figures/fig5_noise_scaling.png)
 ![Where the noise that reaches a local observable comes from](figures/fig6_noise_reach.png)
 ![Light-cone patches against full simulations, and r* against chain length](figures/fig7_patches.png)
+![A 100-qubit chain on ibm_fez against the predictions made before the run](figures/fig8_fez_100q.png)
 
 ## Layout
 
@@ -98,6 +107,10 @@ python scripts/run_patches.py config.yaml patches_20    # patches on 20 sites, ~
 python scripts/run_trajectories.py                      # 20-qubit noisy trajectories, ~45 min on a GPU
 python scripts/run_patches.py config.yaml patches_long  # patches on 24 sites, ~20 min
 python scripts/run_patches.py config.yaml patches_96    # patches on 96 sites, ~15 min
+python scripts/run_noisy.py config.yaml local_xxz       # the XXZ chain, ~2-3 h on a GPU
+python scripts/run_noise_response.py config.yaml noise_response_xxz
+python scripts/run_hardware_long.py dry-run             # 100-qubit layout and predictions (no QPU time)
+python scripts/run_hardware_long.py submit              # then `fetch`; used 98 s of device time
 ```
 
 ## Design notes
