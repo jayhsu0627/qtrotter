@@ -83,3 +83,47 @@ def rms_table(values, draws=2000, seed=0):
         rows.append({"source": source, "order": order, "r": reps,
                      "rms": float(debiased(err)), "rms_std": float(boot.std())})
     return pd.DataFrame(rows)
+
+
+def clean_graph(backend, max_2q_error=0.01, max_readout_error=0.05):
+    """Couplers of `backend` with two-qubit error at most `max_2q_error`, between qubits whose readout
+    error is at most `max_readout_error`: {qubit: set of neighbours}."""
+    target = backend.target
+    gate = next(g for g in ("cz", "ecr", "cx") if g in target.operation_names)
+    readout = {q[0]: p.error for q, p in target["measure"].items() if p is not None and p.error is not None}
+    good = {q for q, e in readout.items() if e <= max_readout_error}
+    graph = {q: set() for q in good}
+    for (a, b), p in target[gate].items():
+        if p is not None and p.error is not None and p.error <= max_2q_error and a in good and b in good:
+            graph[a].add(b)
+            graph[b].add(a)
+    return graph
+
+
+def longest_path(graph, restarts=200, budget=20000, seed=0):
+    """A long simple path in `graph` by depth-first search from random starts, each limited to
+    `budget` expansions (finding the longest one is NP-hard; heavy-hex graphs have degree <= 3)."""
+    rng = np.random.default_rng(seed)
+    nodes = [q for q in graph if graph[q]]
+    best = []
+    for _ in range(restarts):
+        start = nodes[rng.integers(len(nodes))]
+        path, on_path, left = [start], {start}, [budget]
+
+        def extend(q):
+            nonlocal best
+            if len(path) > len(best):
+                best = list(path)
+            if left[0] <= 0:
+                return
+            left[0] -= 1
+            for nxt in rng.permutation(sorted(graph[q] - on_path)):
+                nxt = int(nxt)
+                path.append(nxt)
+                on_path.add(nxt)
+                extend(nxt)
+                path.pop()
+                on_path.discard(nxt)
+
+        extend(start)
+    return best

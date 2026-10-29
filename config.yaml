@@ -71,6 +71,27 @@ local:
   output: local.csv
   local_values: local_values.csv
 
+# The same for the XXZ chain (its maximal velocity is 4J, twice the TFIM's).
+#   python scripts/run_noisy.py config.yaml local_xxz
+local_xxz:
+  backend: FakeTorino
+  noise_scales: [1.0, 0.3, 0.1, 0.03, 0.01]
+  models: [xxz]
+  sizes: [6, 8, 10, 12]
+  times: [1.0, 2.0, 4.0]
+  orders: [1, 2, 4]
+  steps: [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128,
+          160, 192]
+  max_steps: {1: 192, 2: 128, 4: 32}
+  cap_exponent: 0.34
+  optimization_level: 2
+  schedule: true
+  seed: 1
+  device: GPU
+  precision: double
+  output: local_xxz.csv
+  local_values: local_values_xxz.csv
+
 # Follow-up: the same local observables from light-cone patches (qtrotter.patches): w-site
 # sub-chains on the chain's own physical qubits, checked here against the full 12-site chain.
 #   python scripts/run_patches.py config.yaml patches
@@ -185,6 +206,17 @@ noise_response:
   precision: double
   output: noise_response.csv
 
+noise_response_xxz:
+  models: [xxz]
+  sizes: [12]
+  times: [1.0, 2.0, 4.0]
+  orders: [1, 2]
+  steps: [2, 4, 8, 16, 32, 64]
+  p: 0.001
+  device: GPU
+  precision: double
+  output: noise_response_xxz.csv
+
 # Follow-up: the XXZ chain under the same noise model (Question 2 used only the TFIM).
 #   python scripts/run_noisy.py config.yaml noisy_xxz
 noisy_xxz:
@@ -211,5 +243,24 @@ hardware:
   steps: [1, 2, 3, 4, 6, 8, 12, 16, 24]
   shots: 8192
   resilience_level: 1       # readout mitigation (TREX) only; no gate-noise mitigation
+  optimization_level: 2
+  seed: 1
+
+# Follow-up: r* for local observables on a ~100-qubit chain of a device, predicted from light-cone
+# patches under the device's calibration before the run (scripts/run_hardware_long.py).
+hardware_long:
+  backend: ibm_fez
+  model: tfim
+  max_2q_error: 0.02        # chain couplers: no out-of-service or badly calibrated ones
+  max_readout_error: 0.1
+  max_sites: 100
+  times: [1.0, 2.0]
+  orders: [1, 2]
+  steps: [1, 2, 3, 4, 5, 6, 8, 10, 12]   # the dry run also predicted r = 16
+  width: 10                 # patch sites; validated for t <= 2 (notebook section 6)
+  stride: 2
+  shots: 4096               # the RMS over ~400 observables averages most shot noise away
+  max_execution_time: 240   # seconds of QPU time; the job is cancelled beyond it
+  resilience_level: 1       # readout mitigation (TREX) only, as in question 3
   optimization_level: 2
   seed: 1
