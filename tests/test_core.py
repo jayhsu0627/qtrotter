@@ -103,6 +103,45 @@ def test_scaled_backend():
     assert infidelity[1e-6] < 1e-5 and 0.05 < infidelity[0.1] / infidelity[1] < 0.2, infidelity
 
 
+def test_restricted_noise_model():
+    """density_matrix keeps only the noise on the circuit's qubits; the state must not change."""
+    from qiskit_ibm_runtime.fake_provider import FakeTorino
+    from qtrotter.noisy import density_matrix, drop_idle_qubits, noisy_simulator
+
+    backend = FakeTorino()
+    model = tfim(5)
+    tqc = device_circuit(trotter_circuit(model, 2, 3, 0.9), backend, choose_layout(model, backend))
+    sim = noisy_simulator(backend)
+    full = drop_idle_qubits(tqc)
+    full.save_density_matrix(qubits=full.layout.final_index_layout())
+    reference = np.asarray(sim.run(full).result().data()["density_matrix"])
+    assert np.abs(density_matrix(tqc, sim) - reference).max() < 1e-12
+
+
+def test_patches():
+    """Every local Pauli has one owning patch, and a patch as long as the chain is the chain."""
+    from qiskit_ibm_runtime.fake_provider import FakeTorino
+    from qtrotter.hardware import expectations
+    from qtrotter.noisy import density_matrix, noisy_simulator
+    from qtrotter.patches import Patches, owners
+
+    model = tfim(12)
+    for w in (6, 8, 10):
+        names = [k for owned in owners(model, w).values() for k in owned]
+        assert sorted(names) == sorted(model.local_paulis()), w
+    backend = FakeTorino()
+    model = xxz(5)
+    layout = choose_layout(model, backend)
+    sim = noisy_simulator(backend)
+    whole = Patches(model, layout, 5)
+    noisy = whole.noisy(whole.circuits(2, 3, 0.9, backend), sim)
+    full = expectations(density_matrix(device_circuit(trotter_circuit(model, 2, 3, 0.9), backend,
+                                                      layout), sim), model.local_paulis())
+    assert max(abs(noisy[k] - full[k]) for k in full) < 1e-12
+    exact = expectations(Propagator(model).exact_state(0.9), model.local_paulis())
+    assert max(abs(whole.exact(0.9)[k] - exact[k]) for k in exact) < 1e-12
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

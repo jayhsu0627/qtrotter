@@ -18,6 +18,12 @@ failing with probability P0 (total gate error b r, b = K P0 at first order):
     k = 2:  a = 4 t^3 J h (J + h) (N - 1)
 Their estimates are order-of-magnitude (written with ~). We use their constants as published.
 
+Xu, Zhao, Fan & Zhao (arXiv:2504.10247) keep the worst-case constant B_p (the nested-commutator
+norm: ||[A, B]|| / 2 at first order, Childs et al.'s at second) but let every step's error decay
+as the noise contracts the state toward the maximally mixed one, their Eq. (14):
+    sum_{d=1..r} (C gamma Upsilon + B_p (t/r)^(p+1)) exp(-c gamma Upsilon d),   c = 1/2.
+Without the decay this is their closed form, Eq. (15), the same power law as above.
+
 For b we use the calibrated gate error per Trotter step of the actual transpiled circuit
 (slope of the summed gate error versus r), not one uniform rate.
 """
@@ -49,6 +55,18 @@ def avtandilyan_pogosov(order, t, p_step, n, J=1.0, h=1.0):
     if order == 2:
         return optimum(4 * t**3 * J * h * (J + h) * (n - 1), 2, p_step)
     return np.nan
+
+
+def xu_et_al(order, t, p_step, n, norms, r_max=400):
+    """r minimizing Xu et al.'s Eq. (14) with calibrated noise: C gamma Upsilon is the per-step
+    error p_step, and the per-qubit rate in the decay is gamma Upsilon = p_step / n."""
+    b_p = {1: norms["comm_AB"] / 2, 2: norms["comm_BBA"] / 12 + norms["comm_AAB"] / 24}.get(order)
+    if b_p is None:
+        return np.nan
+    r = np.linspace(1, r_max, 100 * r_max)
+    k = p_step / (2 * n)
+    steps = np.exp(-k) * -np.expm1(-k * r) / -np.expm1(-k)  # sum_{d=1..r} exp(-k d)
+    return r[np.argmin((p_step + b_p * (t / r) ** (order + 1)) * steps)]
 
 
 def per_step_error(r, gate_error_sum):
@@ -141,6 +159,7 @@ def summarize(noisy, noiseless, metric="trace_dist"):
             "r_measured": best.r, "err_at_optimum": best[metric], "min_rise": min_rise(g[metric]),
             "r_semi_empirical": semi_empirical(g.r, g[f"trotter_{metric}"], p_step),
             "r_knee_munro": knee_munro(order, t, p_step, norms.loc[(model, n)].to_dict()),
+            "r_xu_et_al": xu_et_al(order, t, p_step, n, norms.loc[(model, n)].to_dict()),
             "r_avtandilyan_pogosov": (avtandilyan_pogosov(order, t, p_step, n)
                                       if model == "tfim" else np.nan),
         })
@@ -172,3 +191,30 @@ def fit_tradeoff(r, err, q=None):
     qq = sol.x[2] if q is None else q
     return {"c": c, "q": qq, "kappa": kappa, "r_star": optimum(c, qq, kappa),
             "rms_log_resid": np.sqrt(np.mean(sol.fun**2))}
+
+
+VALUE_INDEX = ["model", "n", "t", "order", "r", "noise_scale", "source"]
+
+
+def local_errors(values):
+    """RMS error over every local Pauli, per state, from a local_values table (run_noisy.py):
+    the index columns plus `rms`, for the noisy and noiseless-Trotter rows, against exact evolution."""
+    out = []
+    for _, g in values.groupby(["model", "n", "t"]):
+        obs = [c for c in g.columns if c not in VALUE_INDEX and g[c].notna().all()]
+        exact = g.loc[g.source == "exact", obs].iloc[0].to_numpy()
+        h = g[g.source != "exact"]
+        out.append(h[VALUE_INDEX].assign(rms=np.sqrt(((h[obs].to_numpy() - exact) ** 2).mean(axis=1))))
+    return pd.concat(out, ignore_index=True)
+
+
+def refined_optimum(r, err):
+    """argmin of err over the r grid, refined by a parabola in log r through the minimum and its two
+    neighbours. Grid points alone are too coarse to fit how r* scales."""
+    r, err = np.asarray(r, float), np.asarray(err, float)
+    i = int(np.argmin(err))
+    if i in (0, len(r) - 1):
+        return r[i]
+    x, y = np.log(r[i - 1:i + 2]), err[i - 1:i + 2]
+    a, b, _ = np.polyfit(x, y, 2)
+    return float(np.exp(np.clip(-b / (2 * a), x[0], x[2]))) if a > 0 else r[i]

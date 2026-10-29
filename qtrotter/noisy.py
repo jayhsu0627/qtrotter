@@ -58,6 +58,29 @@ def noisy_simulator(backend, device="CPU", precision="double", noise=True):
     return AerSimulator(method="density_matrix", device=device, precision=precision)
 
 
+def restricted_noise_model(noise_model, qubits):
+    """The errors of `noise_model` that can act on `qubits`: gate and readout errors that touch any
+    other qubit are dropped, which changes nothing for a circuit using only `qubits`.
+
+    Aer deep-copies the noise model for every circuit with delays (it adds their relaxation as
+    channels). With all 133 qubits of a Heron device that costs about 2 s per run, 25 times the
+    simulation itself at 10 qubits. NoiseModel cannot drop errors through its public API, so this
+    edits a copy's tables (qiskit-aer 0.18).
+    """
+    keep = set(qubits)
+    out = copy.copy(noise_model)
+    out._local_quantum_errors = {}
+    for name, errors in noise_model._local_quantum_errors.items():
+        kept = {q: e for q, e in errors.items() if keep.issuperset(q)}
+        if kept:
+            out._local_quantum_errors[name] = kept
+    out._local_readout_errors = {q: e for q, e in noise_model._local_readout_errors.items()
+                                 if keep.issuperset(q)}
+    out._noise_qubits = noise_model._noise_qubits & keep
+    out._custom_noise_passes = list(noise_model._custom_noise_passes)
+    return out
+
+
 def drop_idle_qubits(tqc):
     """Remove delays on wires that carry no gates, so Aer can truncate them away."""
     active = {q for ins in tqc.data if ins.operation.name != "delay" for q in ins.qubits}
@@ -73,7 +96,11 @@ def density_matrix(tqc, sim):
     """Final state of the chain qubits, in chain order (site 0 = least significant bit)."""
     tqc = drop_idle_qubits(tqc)
     tqc.save_density_matrix(qubits=tqc.layout.final_index_layout())
-    result = sim.run(tqc).result()
+    noise = sim.options.noise_model
+    if noise is not None:
+        used = {tqc.find_bit(q).index for ins in tqc.data for q in ins.qubits}
+        noise = restricted_noise_model(noise, used)
+    result = sim.run(tqc, noise_model=noise).result()
     if not result.success:
         raise RuntimeError(result.status)
     return np.asarray(result.data()["density_matrix"])

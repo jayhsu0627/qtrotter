@@ -47,6 +47,144 @@ noise_scaling:
   precision: double
   output: noise_scaling.csv
 
+# Follow-up: local observables. The same trade-off read out through every Z_i, X_i, Z_iZ_i+1 and
+# X_iX_i+1 (written to local_values), at several chain lengths and noise scales, to test whether
+# r* for local observables is independent of n and how it scales with the noise rate.
+# Worse devices need fewer steps: at scale s, r <= max_steps * (0.01 / s)^cap_exponent.
+#   python scripts/run_noisy.py config.yaml local
+local:
+  backend: FakeTorino
+  noise_scales: [1.0, 0.3, 0.1, 0.03, 0.01]
+  models: [tfim]
+  sizes: [6, 8, 10, 12]
+  times: [1.0, 2.0, 4.0]
+  orders: [1, 2, 4]
+  steps: [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128,
+          160, 192]
+  max_steps: {1: 192, 2: 128, 4: 32}
+  cap_exponent: 0.34
+  optimization_level: 2
+  schedule: true
+  seed: 1
+  device: GPU
+  precision: double
+  output: local.csv
+  local_values: local_values.csv
+
+# Follow-up: the same local observables from light-cone patches (qtrotter.patches): w-site
+# sub-chains on the chain's own physical qubits, checked here against the full 12-site chain.
+#   python scripts/run_patches.py config.yaml patches
+patches:
+  backend: FakeTorino
+  noise_scales: [1.0, 0.3, 0.1, 0.03, 0.01]
+  models: [tfim]
+  chains: [12]
+  widths: [6, 8, 10]
+  stride: 2
+  times: [1.0, 2.0, 4.0]
+  orders: [1, 2]
+  steps: [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128,
+          160, 192]
+  max_steps: {1: 192, 2: 128}
+  cap_exponent: 0.34
+  optimization_level: 2
+  schedule: true
+  seed: 1
+  device: GPU
+  precision: double
+  output: patches.csv
+
+# The same patches on longer chains, laid out on Torino as single paths (the transpiler finds one of
+# 96 qubits but not of 120). 24 sites at three noise levels; 96 sites at today's.
+#   python scripts/run_patches.py config.yaml patches_long
+#   python scripts/run_patches.py config.yaml patches_96
+patches_long:
+  backend: FakeTorino
+  noise_scales: [1.0, 0.1, 0.01]
+  models: [tfim]
+  chains: [24]
+  widths: [10]
+  stride: 2
+  times: [1.0, 2.0]
+  orders: [1, 2]
+  steps: [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128,
+          160, 192]
+  max_steps: {1: 192, 2: 128}
+  cap_exponent: 0.34
+  optimization_level: 2
+  schedule: true
+  seed: 1
+  device: GPU
+  precision: double
+  output: patches_long.csv
+
+patches_96:
+  backend: FakeTorino
+  noise_scales: [1.0]
+  models: [tfim]
+  chains: [96]
+  widths: [10]
+  stride: 2
+  times: [1.0, 2.0]
+  orders: [1, 2]
+  steps: [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24]
+  optimization_level: 2
+  schedule: true
+  seed: 1
+  device: GPU
+  precision: double
+  output: patches_long.csv
+
+# An independent check of the patches on a 20-qubit chain: noisy statevector trajectories of the
+# whole chain (5 batches of 100), at t = 1 around the optimum, against the patches' prediction.
+#   python scripts/run_trajectories.py config.yaml trajectories
+#   python scripts/run_patches.py config.yaml patches_20
+trajectories:
+  backend: FakeTorino
+  models: [tfim]
+  sizes: [20]
+  times: [1.0]
+  orders: [1, 2]
+  steps: {1.0: [2, 3, 4, 5, 6, 8], 0.1: [4, 5, 6, 7, 8, 10, 12, 14, 16]}
+  shots: 100
+  batches: 5
+  optimization_level: 2
+  schedule: true
+  seed: 1
+  device: GPU
+  output: trajectories.csv
+
+patches_20:
+  backend: FakeTorino
+  noise_scales: [1.0, 0.1]
+  models: [tfim]
+  chains: [20]
+  widths: [6, 8, 10]
+  stride: 2
+  times: [1.0]
+  orders: [1, 2]
+  steps: [2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16]
+  optimization_level: 2
+  schedule: true
+  seed: 1
+  device: GPU
+  precision: double
+  output: patches_20.csv
+
+# Follow-up: which sites' noise reaches a local observable. Depolarizing noise of probability p
+# after every Trotter step on one site at a time, ideal gates otherwise.
+#   python scripts/run_noise_response.py config.yaml noise_response
+noise_response:
+  models: [tfim]
+  sizes: [12]
+  times: [1.0, 2.0, 4.0]
+  orders: [1, 2]
+  steps: [2, 4, 8, 16, 32, 64]
+  p: 0.001
+  device: GPU
+  precision: double
+  output: noise_response.csv
+
 # Follow-up: the XXZ chain under the same noise model (Question 2 used only the TFIM).
 #   python scripts/run_noisy.py config.yaml noisy_xxz
 noisy_xxz:

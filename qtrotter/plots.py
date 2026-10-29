@@ -244,3 +244,109 @@ def noise_scaling(summary, predicted, times, thresholds=(), save=None):
     if save:
         fig.savefig(save, dpi=200, bbox_inches="tight")
     return fig
+
+
+def noise_reach(resp, observables, order=1, v=2.0, save=None):
+    """Figure 6: how far noise on one site reaches a few central local observables.
+
+    `resp` holds noise_response.csv rows (depolarizing noise of probability p after every step,
+    on one site at a time). Plotted: the RMS change of `observables` divided by p r, i.e. per
+    unit of noise per step, against the noisy site, one line per r. The shaded band is the
+    dynamics' light cone, sites within v t of the observables. Changes below 1e-10 are exact
+    zeros up to rounding (sites outside the circuit's light cone at small r) and are not drawn.
+    """
+    style()
+    d = resp[(resp.order == order) & resp.observable.isin(observables)]
+    sites = [int(s) for name in observables for s in name[1:].split(name[0]) if s]
+    lo, hi = min(sites), max(sites)
+    times, steps = sorted(d.t.unique()), sorted(d.r.unique())
+    shades = plt.cm.Blues(np.linspace(0.35, 1.0, len(steps)))  # one hue, light to dark with r
+    fig, axes = plt.subplots(1, len(times), figsize=(4.1 * len(times), 3.5), sharey=True)
+    for ax, t in zip(np.atleast_1d(axes), times):
+        g = d[d.t == t]
+        n = int(g.n.iloc[0])
+        ax.axvspan(max(lo - v * t, -0.5), min(hi + v * t, n - 0.5), color=GRID, alpha=0.7, lw=0)
+        for r, c in zip(steps, shades):
+            h = g[g.r == r].groupby("site").delta.apply(lambda x: np.sqrt(np.mean(x**2)))
+            y = h.to_numpy() / (g.p.iloc[0] * r)
+            ax.plot(h.index, np.where(y > 1e-10, y, np.nan), color=c, marker="o", markersize=3.5,
+                    label=f"r = {r}")
+        ax.axvline(lo, color=INK_2, lw=0.8, ls=":")
+        ax.axvline(hi, color=INK_2, lw=0.8, ls=":")
+        ax.set_yscale("log")
+        ax.set_ylim(3e-9, 1)
+        ax.set_xticks(range(0, n, 2))
+        ax.set_xlim(-0.5, n - 0.5)
+        ax.set_title(f"t = {t:g}  (shaded: within v t = {v * t:g} sites)")
+        ax.set_xlabel("site with noise")
+    np.atleast_1d(axes)[0].set_ylabel("change per unit noise per step")
+    np.atleast_1d(axes)[-1].legend(loc="lower right", fontsize=8, ncol=2)
+    fig.tight_layout()
+    if save:
+        fig.savefig(save, dpi=200, bbox_inches="tight")
+    return fig
+
+
+def patch_check(check, by_length, grid, save=None):
+    """Figure 7: light-cone patches against full simulations, and r* against chain length.
+
+    Left: r* from patches against r* of the full 12-site chain, one point per (width, t, order,
+    noise scale); the band is one grid step either side. `check` has columns width, t, r_patch,
+    r_full. Right: r* for local observables at today's noise against chain length. `by_length`
+    has columns n, t, order, r_star, source ("full", "trajectories" or "patches").
+    """
+    style()
+    fig, (left, right) = plt.subplots(1, 2, figsize=(9.6, 4.0))
+    widths = sorted(check.width.unique())
+    marks = dict(zip(widths, ["o", "s", "^", "D"]))
+    shades = dict(zip(sorted(check.t.unique()), plt.cm.Greys(np.linspace(0.45, 0.95, check.t.nunique()))))
+    g = np.asarray(sorted(grid), float)
+    left.fill_between(g[1:-1], g[:-2], g[2:], color=GRID, alpha=0.8, lw=0)  # one grid step either side
+    left.plot(g, g, color=INK_2, lw=0.8)
+    rng = np.random.default_rng(0)  # small horizontal jitter so equal points stay visible
+    for w in widths:
+        for t, c in shades.items():
+            h = check[(check.width == w) & (check.t == t)]
+            x = h.r_full * np.exp(rng.uniform(-0.06, 0.06, len(h)))
+            left.scatter(x, h.r_patch, marker=marks[w], facecolor="none", edgecolor=c, s=26, lw=1.0)
+    for ax in (left, right):
+        ax.set_yscale("log", base=2)
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:g}"))
+    left.set_xscale("log", base=2)
+    left.xaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:g}"))
+    left.set_xlabel("r* of the full 12-site chain")
+    left.set_ylabel("r* from patches")
+    left.set_title("patches against the full chain")
+    handles = ([Line2D([], [], color=INK_2, marker=marks[w], ls="", mfc="none", label=f"{w}-site patches")
+                for w in widths]
+               + [Line2D([], [], color=c, marker="o", ls="", label=f"t = {t:g}") for t, c in shades.items()])
+    left.legend(handles=handles, loc="upper left", fontsize=8)
+
+    styles = {1.0: "-", 2.0: "--", 4.0: ":"}
+    for (t, order), h in by_length.groupby(["t", "order"]):
+        h = h.sort_values("n")
+        c = ORDER_COLOR[order]
+        right.plot(h.n, h.r_star, color=c, ls=styles.get(t, "-"), lw=1.2)
+        for src, k in h.groupby("source"):  # shape: order (diamond: trajectories); filled: full chain
+            right.plot(k.n, k.r_star, color=c, ls="", mfc=c if src == "full" else SURFACE,
+                       marker="D" if src == "trajectories" else ORDER_MARKER[order])
+    right.set_xscale("log", base=2)
+    right.set_yticks(sorted(by_length.r_star.unique()))
+    right.yaxis.set_minor_locator(plt.NullLocator())
+    lengths = sorted(by_length.n.unique())
+    right.set_xticks(lengths)
+    right.set_xticklabels([str(int(n)) for n in lengths])
+    right.minorticks_off()
+    right.set_xlabel("chain length n")
+    right.set_ylabel("optimal steps r* (local observables)")
+    right.set_title("r* at today's noise, by chain length")
+    handles = (_order_handles(sorted(by_length.order.unique()))
+               + _style_handles([(styles[t], None, f"t = {t:g}") for t in sorted(by_length.t.unique())])
+               + [Line2D([], [], color=INK_2, marker="o", ls="", label="full chain"),
+                  Line2D([], [], color=INK_2, marker="o", ls="", mfc=SURFACE, label="patches"),
+                  Line2D([], [], color=INK_2, marker="D", ls="", mfc=SURFACE, label="trajectories")])
+    right.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.17), fontsize=8, ncol=4)
+    fig.tight_layout()
+    if save:
+        fig.savefig(save, dpi=200, bbox_inches="tight")
+    return fig
