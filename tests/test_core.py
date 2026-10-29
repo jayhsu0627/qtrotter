@@ -25,6 +25,22 @@ def test_numpy_formulas_match_qiskit_synthesis():
             assert overlap(prop.trotter_state(order, 3, 0.7), sv) > 1 - 1e-10, (model.name, order)
 
 
+def test_layered_groups():
+    """Layering reorders commuting terms only: same unitary, and the TFIM's ZZ bonds go from a
+    staircase as deep as the chain to two layers."""
+    from qiskit.quantum_info import Operator
+
+    for model in (tfim(6), xxz(6)):
+        for order in (1, 2):
+            a, b = (Operator(logical_circuit(trotter_circuit(model, order, 3, 0.7, layer))).data
+                    for layer in (True, False))
+            assert np.abs(a - b).max() < 1e-12, (model.name, order)
+    model = tfim(10)
+    depth = {layer: logical_circuit(trotter_circuit(model, 1, 1, 0.5, layer)).depth(
+                 lambda ins: ins.operation.num_qubits == 2) for layer in (True, False)}
+    assert depth[True] == 4 and depth[False] == 2 * (model.n - 1), depth
+
+
 def test_exact_state_and_unitaries():
     model = xxz(6)
     prop = Propagator(model)

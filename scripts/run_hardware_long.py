@@ -5,13 +5,16 @@ light-cone patches (qtrotter.patches) before the run.
     python scripts/run_hardware_long.py submit    # submit one Estimator job (commit the predictions first)
     python scripts/run_hardware_long.py fetch     # collect the submitted job's results
 
+A second argument names the config section (default hardware_long); outputs are named after it.
+
 Layout: the longest chain found whose couplers and readout pass the thresholds in config.yaml
 (hardware.clean_graph, hardware.longest_path), cut to the `max_sites` sites with the lowest summed
-two-qubit error. Predictions, from the device's calibration at dry-run time: every local Pauli from
+two-qubit error, or the layout of an earlier run (`layout_from`). Predictions, from the device's
+calibration at dry-run time: every local Pauli from
 patches (exact, noiseless Trotter and noisy values), and the global-damping estimate of question 3
 (every value shrunk by exp(-p r), p the per-step gate error of the whole chain) for comparison.
-Outputs in results/: hardware_long_values.csv (long format, as hardware_values.csv),
-hardware_long_circuits.csv, hardware_long_job.json.
+Outputs in results/, for section S: S_values.csv (long format, as hardware_values.csv),
+S_circuits.csv, S_job.json.
 """
 import json
 import os
@@ -37,10 +40,12 @@ from qtrotter.patches import Patches  # noqa: E402
 from qtrotter.predict import per_step_error  # noqa: E402
 
 mode = sys.argv[1] if len(sys.argv) > 1 else "dry-run"
+section = sys.argv[2] if len(sys.argv) > 2 else "hardware_long"
 cfg = yaml.safe_load(open(ROOT / "config.yaml"))
-run = cfg["hardware_long"]
+run = cfg[section]
 out = ROOT / "results"
-job_file = out / "hardware_long_job.json"
+job_file = out / f"{section}_job.json"
+values_file = out / f"{section}_values.csv"
 service = QiskitRuntimeService()
 
 
@@ -65,15 +70,18 @@ def long_rows(source, t, order, reps, values, stds=None):
 if mode in ("dry-run", "submit"):
     backend = service.backend(run["backend"])
     calibrated = backend.properties().last_update_date.isoformat()
-    if mode == "dry-run":
+    if mode == "dry-run" and "layout_from" in run:
+        layout = json.load(open(ROOT / run["layout_from"]))["layout"]
+    elif mode == "dry-run":
         layout = chain_layout(backend)
     else:  # the layout the predictions were made for
         layout = json.load(open(job_file))["layout"]
     model = build(run["model"], len(layout), **cfg["models"][run["model"]])
     paulis = model.local_paulis()
     opts = {"seed": run["seed"], "optimization_level": run["optimization_level"]}
+    layer = run.get("layer", True)
     jobs = [dict(j, t=t) for t in run["times"]
-            for j in hw.build(model, run["orders"], run["steps"], t, backend, layout, **opts)]
+            for j in hw.build(model, run["orders"], run["steps"], t, backend, layout, layer=layer, **opts)]
     print(f"{backend.name} (calibrated {calibrated}): {len(layout)}-site chain, {len(jobs)} circuits",
           flush=True)
 
@@ -87,7 +95,7 @@ if mode in ("dry-run", "submit"):
             for order in run["orders"]:
                 for reps in run["steps"]:
                     rows += long_rows("trotter", t, order, reps, patches.trotter(order, reps, t))
-                    noisy = patches.noisy(patches.circuits(order, reps, t, backend, **opts), sim)
+                    noisy = patches.noisy(patches.circuits(order, reps, t, backend, layer, **opts), sim)
                     rows += long_rows("patches", t, order, reps, noisy)
                 print(f"t={t} order {order}: patches done, {time.perf_counter() - start:.0f} s", flush=True)
         values = pd.DataFrame(rows)
@@ -101,9 +109,9 @@ if mode in ("dry-run", "submit"):
                              & (values.r == reps)].set_index("observable").value
                 rows += long_rows("global_damping", t, order, reps,
                                   (np.exp(-p_step * reps) * tro).to_dict())
-        pd.DataFrame(rows).to_csv(out / "hardware_long_values.csv", index=False, float_format="%.8g")
+        pd.DataFrame(rows).to_csv(values_file, index=False, float_format="%.8g")
         meta["backend"], meta["calibrated"] = backend.name, calibrated
-        meta.to_csv(out / "hardware_long_circuits.csv", index=False)
+        meta.to_csv(out / f"{section}_circuits.csv", index=False)
         json.dump({"backend": backend.name, "calibrated": calibrated, "layout": layout,
                    "config": run}, open(job_file, "w"), indent=1)
         print("wrote predictions; commit them before submitting", flush=True)
@@ -132,10 +140,9 @@ elif mode == "fetch":
         rows += long_rows("hardware", pub["t"], pub["order"], pub["r"],
                           dict(zip(record["observables"], res.data.evs)),
                           dict(zip(record["observables"], res.data.stds)))
-    values = pd.read_csv(out / "hardware_long_values.csv")
+    values = pd.read_csv(values_file)
     values = values[values.source != "hardware"]
-    pd.concat([values, pd.DataFrame(rows)]).to_csv(out / "hardware_long_values.csv", index=False,
-                                                    float_format="%.8g")
+    pd.concat([values, pd.DataFrame(rows)]).to_csv(values_file, index=False, float_format="%.8g")
     record["usage_seconds"] = job.usage()
     record["finished"] = datetime.now(timezone.utc).isoformat()
     json.dump(record, open(job_file, "w"), indent=1)

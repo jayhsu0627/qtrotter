@@ -264,3 +264,22 @@ hardware_long:
   resilience_level: 1       # readout mitigation (TREX) only, as in question 3
   optimization_level: 2
   seed: 1
+  layer: false              # ZZ bonds in chain order: a 99-bond serial staircase, ~20 us of idle
+
+# Rerun after the diagnosis of hardware_long: the same 100 qubits, with the ZZ bonds in two
+# layers (circuits.layered), so no site idles through the staircase. t = 1 only, to save QPU time.
+hardware_long_layered:
+  backend: ibm_fez
+  model: tfim
+  layout_from: results/hardware_long_job.json
+  times: [1.0]
+  orders: [1, 2]
+  steps: [2, 3, 4, 5, 6, 8, 10]
+  width: 10
+  stride: 2
+  shots: 4096
+  max_execution_time: 60
+  resilience_level: 1
+  optimization_level: 2
+  seed: 1
+  layer: true

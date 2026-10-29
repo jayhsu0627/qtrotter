@@ -86,9 +86,9 @@ class Patches:
     def trotter(self, order, reps, t):
         return self._noiseless(lambda prop: prop.trotter_state(order, reps, t))
 
-    def circuits(self, order, reps, t, backend, **opts):
+    def circuits(self, order, reps, t, backend, layer=True, **opts):
         """Transpiled patch circuits, one per patch, on the patch's own physical qubits."""
-        return {a: device_circuit(trotter_circuit(sub, order, reps, t), backend,
+        return {a: device_circuit(trotter_circuit(sub, order, reps, t, layer), backend,
                                   self.layout[a:a + self.w], **opts)
                 for a, sub in self.models.items()}
 

@@ -4,14 +4,40 @@ from qiskit.circuit.library import PauliEvolutionGate
 from qiskit.synthesis import LieTrotter, SuzukiTrotter
 
 
-def trotter_circuit(model, order, reps, t):
-    """Initial-state preparation followed by `reps` steps of the order-`order` formula."""
+def layered(group):
+    """The same group with its terms reordered into layers of disjoint support (first fit).
+
+    The terms commute, so the unitary is unchanged. Listed in chain order, the TFIM's ZZ bonds
+    each share a qubit with the next, and the synthesized gates run as one serial staircase down
+    the chain: about 0.2 us per bond on ibm_fez, 20 us at 100 sites. Layered, they run as two
+    layers (even bonds, then odd bonds).
+    """
+    layers = []  # (qubits used, term indices)
+    for k, p in enumerate(group.paulis):
+        support = p.z | p.x
+        for used, terms in layers:
+            if not (used & support).any():
+                used |= support
+                terms.append(k)
+                break
+        else:
+            layers.append((support.copy(), [k]))
+    return group[[k for _, terms in layers for k in terms]]
+
+
+def trotter_circuit(model, order, reps, t, layer=True):
+    """Initial-state preparation followed by `reps` steps of the order-`order` formula.
+
+    `layer=False` keeps each group's terms in model order, as every circuit in results/ before
+    the layered fix was built (the 100-qubit ibm_fez run included).
+    """
     qc = QuantumCircuit(model.n)
     for i, bit in enumerate(model.init_bits):
         if bit == "1":
             qc.x(i)
     synth = LieTrotter(reps=reps) if order == 1 else SuzukiTrotter(order=order, reps=reps)
-    qc.append(PauliEvolutionGate(list(model.groups), time=t, synthesis=synth), range(model.n))
+    groups = [layered(g) for g in model.groups] if layer else list(model.groups)
+    qc.append(PauliEvolutionGate(groups, time=t, synthesis=synth), range(model.n))
     return qc
 
 

@@ -13,12 +13,12 @@ from .circuits import device_circuit, gate_error_sum, trotter_circuit, two_qubit
 from .noisy import density_matrix
 
 
-def build(model, orders, steps, t, backend, layout, seed=1, optimization_level=2):
+def build(model, orders, steps, t, backend, layout, seed=1, optimization_level=2, layer=True):
     """ISA circuits for the device (unscheduled: the device schedules them itself)."""
     jobs = []
     for order in orders:
         for reps in steps:
-            tqc = device_circuit(trotter_circuit(model, order, reps, t), backend, layout, seed=seed,
+            tqc = device_circuit(trotter_circuit(model, order, reps, t, layer), backend, layout, seed=seed,
                                  optimization_level=optimization_level, schedule=False)
             jobs.append({"order": order, "r": reps, "circuit": tqc,
                          "two_qubit_gates": two_qubit_count(tqc), "depth": tqc.depth(),
