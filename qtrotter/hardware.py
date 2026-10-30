@@ -4,6 +4,8 @@ Hardware returns expectation values, not states, so the error metric here is the
 from exact evolution over all local Paulis (Model.local_paulis). Squaring each observable's error
 before averaging stops errors in different observables from cancelling.
 """
+import re
+
 import numpy as np
 import pandas as pd
 from qiskit.transpiler import PassManager
@@ -82,6 +84,56 @@ def rms_table(values, draws=2000, seed=0):
         boot = debiased(err + rng.normal(0.0, std, size=(draws, len(std))))
         rows.append({"source": source, "order": order, "r": reps,
                      "rms": float(debiased(err)), "rms_std": float(boot.std())})
+    return pd.DataFrame(rows)
+
+
+def wide(values, source, column="value"):
+    """One row per (order, r), one column per observable (in the exact rows' order)."""
+    names = values[values.source == "exact"].observable.tolist()
+    g = values[values.source == source]
+    return g.pivot_table(index=["order", "r"], columns="observable", values=column)[names]
+
+
+def sites(name):
+    """Chain sites a local Pauli acts on: 'X3X4' -> {3, 4}."""
+    return {int(s) for s in re.findall(r"\d+", name)}
+
+
+def gap_table(values, prediction="patches"):
+    """Where a device run departs from its prediction, per (order, r), over all local Paulis.
+
+    `dev` and `pred` are RMS errors against exact evolution; `noise_dev` and `noise_pred` the RMS
+    departure from the noiseless Trotter values, i.e. the noise alone; `gap` the RMS of device
+    minus prediction; `damp_dev` and `damp_pred` the least-squares factor by which the values are a
+    shrunken copy of the noiseless Trotter values. Device terms have the shot-noise bias removed.
+    """
+    exact = values[values.source == "exact"].set_index("observable").value
+    dev, var = wide(values, "hardware"), wide(values, "hardware", "std") ** 2
+    pred, trot = wide(values, prediction), wide(values, "trotter")
+    e = exact[dev.columns].to_numpy()
+    rms = lambda d, v=0: np.sqrt(np.maximum((d**2 - v).mean(axis=1), 0.0))
+    shrink = lambda a: (a * trot).sum(axis=1) / (trot**2).sum(axis=1)
+    return pd.DataFrame({"dev": rms(dev - e, var), "pred": rms(pred - e),
+                         "noise_dev": rms(dev - trot, var), "noise_pred": rms(pred - trot),
+                         "gap": rms(dev - pred, var), "damp_dev": shrink(dev), "damp_pred": shrink(pred)},
+                        index=dev.index)
+
+
+def leave_out(values, drop, prediction="patches"):
+    """r* and errors per order over the local Paulis that touch none of the sites in `drop`:
+    the device's r*, the predicted r*, and both errors at the predicted r*."""
+    exact = values[values.source == "exact"].set_index("observable").value
+    keep = [k for k in exact.index if not sites(k) & set(drop)]
+    dev, var = wide(values, "hardware")[keep], wide(values, "hardware", "std")[keep] ** 2
+    pred, e = wide(values, prediction)[keep], exact[keep].to_numpy()
+    err_dev = pd.Series(np.sqrt(np.maximum(((dev - e) ** 2 - var).mean(axis=1), 0.0)), index=dev.index)
+    err_pred = pd.Series(np.sqrt(((pred - e) ** 2).mean(axis=1)), index=dev.index)
+    rows = []
+    for order in sorted(dev.index.get_level_values("order").unique()):
+        d, p = err_dev.loc[order], err_pred.loc[order]
+        r_pred = p.idxmin()
+        rows.append({"order": order, "observables": len(keep), "r_dev": d.idxmin(), "r_pred": r_pred,
+                     "dev_at_r_pred": d[r_pred], "pred_at_r_pred": p[r_pred]})
     return pd.DataFrame(rows)
 
 

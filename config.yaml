@@ -283,3 +283,17 @@ hardware_long_layered:
   optimization_level: 2
   seed: 1
   layer: true
+
+# Follow-up: could fixed coherent errors explain what remains between the layered ibm_fez run and
+# its prediction? Per-bond ZZ over-rotations and per-site Z phases per step, std in rad, as
+# (sigma_zz, sigma_z); noiseless statevector otherwise.
+#   python scripts/coherent_errors.py config.yaml coherent_errors
+coherent_errors:
+  n: 16
+  t: 1.0
+  orders: [1, 2]
+  steps: [2, 3, 4, 5, 6, 8, 10]
+  sigmas: [[0.02, 0.0], [0.05, 0.0], [0.1, 0.0], [0.0, 0.05], [0.0, 0.1], [0.05, 0.05]]
+  draws: 8
+  seed: 1
+  output: coherent_errors.csv

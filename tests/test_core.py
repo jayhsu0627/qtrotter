@@ -158,6 +158,27 @@ def test_patches():
     assert max(abs(whole.exact(0.9)[k] - exact[k]) for k in exact) < 1e-12
 
 
+def test_gap_table():
+    """A device that returns the prediction shrunk by 0.9 shows 0.9 times its damping; leave_out drops
+    every observable that touches a dropped site."""
+    import pandas as pd
+    from qtrotter.hardware import gap_table, leave_out
+
+    names, rng = ["Z0", "Z1", "Z0Z1", "X0", "X1", "X0X1"], np.random.default_rng(0)
+    exact = rng.uniform(-1, 1, len(names))
+    rows = [{"source": "exact", "order": 0, "r": 0, "observable": k, "value": v} for k, v in zip(names, exact)]
+    for r in (2, 4):
+        trot = exact + 0.1 / r
+        for src, scale in (("trotter", 1.0), ("patches", 0.95), ("hardware", 0.95 * 0.9)):
+            rows += [{"source": src, "order": 1, "r": r, "observable": k, "value": scale * v, "std": 0.0}
+                     for k, v in zip(names, trot)]
+    values = pd.DataFrame(rows)
+    gap = gap_table(values)
+    assert np.allclose(gap.damp_dev, 0.9 * gap.damp_pred) and np.allclose(gap.damp_pred, 0.95)
+    assert leave_out(values, [0]).observables.iloc[0] == 2  # Z1 and X1
+    assert leave_out(values, []).observables.iloc[0] == len(names)
+
+
 def test_longest_path():
     """A 7-site line with a 2-site branch off site 3: the longest simple path is the line."""
     from qtrotter.hardware import longest_path

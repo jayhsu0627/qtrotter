@@ -12,7 +12,7 @@ On noisy hardware the number of Trotter steps $r$ has an optimum $r^*$, where sh
 noise balance. Two analytic formulas predict $r^*$ from a single uniform gate error rate (Knee & Munro 2015;
 Avtandilyan & Pogosov 2024). I test them on transverse-field Ising chains of 4 to 12 qubits simulated under the
 calibrated noise model of IBM's Torino processor, and on a 12-qubit chain run on `ibm_kingston`. Both formulas get the
-scaling right but overshoot $r^*$, by a median factor of 2.4 and 3.7. An ablation traces the overshoot to their
+scaling right but overshoot $r^*$, by a median factor of 2.3 and 3.6. An ablation traces the overshoot to their
 worst-case Trotter constant, which exceeds the initial state's actual one by a median 9 to 15 times: swapping only that
 constant removes it. Combining the state's actual Trotter error with the calibrated gate errors predicts $r^*$ within
 one grid step in all 42 configurations with a clear minimum. On hardware the measured optimum ($r^* = 8$ at first
@@ -45,7 +45,9 @@ for the TFIM, even and odd bonds for XXZ. XXZ is used only for the bound compari
 
 **Formulas.** Lie–Trotter $S_1 = e^{-iB\delta}e^{-iA\delta}$, Strang
 $S_2 = e^{-iA\delta/2}e^{-iB\delta}e^{-iA\delta/2}$, and Suzuki's fourth order (five $S_2$ stages), with
-$\delta = t/r$. Circuits come from Qiskit's `PauliEvolutionGate` with the groups passed as a list. This matters: passed
+$\delta = t/r$. Circuits come from Qiskit's `PauliEvolutionGate` with the groups passed as a list, each group's commuting terms
+listed in layers of disjoint support (for the TFIM, even bonds then odd bonds; listed in chain order they would run as
+a serial staircase down the chain). This matters: passed
 as a single operator, Qiskit's second-order TFIM circuit puts the ZZ terms outermost and needs 1.7 times the two-qubit
 gates and 5 times the depth of the grouped version (8 qubits, $r = 16$). Worse, since $S_2^r = a\,S_1^r\,a^{-1}$ with
 $a$ a diagonal ZZ half-step, that ungrouped second-order circuit gives exactly the same Z-type observables as first
@@ -69,7 +71,8 @@ trace distance to the exact state $e^{-iHt}|\psi_0\rangle$.
 and 2 at nine values of $r$, 8192 shots per circuit, readout mitigation (TREX) only. The device returns expectation
 values, so the metric is the RMS error over all 46 local Paulis ($Z_i$, $X_i$, $Z_iZ_{i+1}$, $X_iX_{i+1}$), with the
 shot-noise bias subtracted and bootstrap error bars. The same circuits were simulated under the device's own
-calibration at submission time. The job used 92 s of device time.
+calibration at submission time. The job used 92 s of device time. (This run predates the layered ordering: its bonds
+were in chain order, which at 12 sites adds about 2 µs of idling, on the device and in its noise model alike.)
 
 ## 3. Results
 
@@ -81,8 +84,8 @@ as $n^{p+1}$.
 
 **The optimum under device noise.** Figure 1 shows the trade-off for an 8-qubit chain: the noisy error falls with the
 Trotter error, then rises as gates accumulate. The optimum grows with evolution time: at second order,
-$r^* = 3$–4 at $t = 1$, 5–6 at $t = 2$ and 10–12 at $t = 4$, across all chain lengths. At the optimum the error is
-already large: 0.77 to 0.90 at $t = 4$ for 10 to 12 qubits. I call a minimum clear when the error climbs by at least
+$r^* = 3$–4 at $t = 1$, 6 at $t = 2$ and 12 at $t = 4$, across all chain lengths. At the optimum the error is
+already large: 0.75 to 0.89 at $t = 4$ for 10 to 12 qubits. I call a minimum clear when the error climbs by at least
 0.05 on both sides of $r^*$. All 30 first- and second-order minima are clear; three fourth-order ones are not, and one
 of those ($n = 12$, $t = 4$) is flat at trace distance 0.99, close to maximally mixed for every $r$.
 
@@ -92,7 +95,7 @@ of those ($n = 12$, $t = 4$) is flat at trace distance 0.99, close to maximally 
 its own Trotter constant $a$ and the calibrated per-step error $b$. Knee & Munro do not evaluate second order, so there
 I insert Childs et al.'s second-order commutator bound into their general form $\mathcal{C}/r^{s-1} + \mathcal{D}r$;
 those numbers are my extension. Knee & Munro's formula overshoots the measured
-$r^*$ by a median 3.4 at first order and 2.3 at second; Avtandilyan & Pogosov's by 2.8 and 4.2 (Figure 2).
+$r^*$ by a median 3.3 at first order and 2.2 at second; Avtandilyan & Pogosov's by 2.9 and 4.1 (Figure 2).
 
 ![Predicted against measured $r^*$ over ($n$, $t$, order). Left and centre: the two analytic formulas, fed calibrated per-step errors; they cover orders 1 and 2 only (30 configurations each). Right: the semi-empirical predictor, all 45.](../figures/fig3_predictions.png){width=86%}
 
@@ -104,17 +107,17 @@ itself when errors are this large. Table 1 separates them. Swapping only the con
 noiseless error as $C/r^q$, inside the additive formula removes the overshoot; swapping only the rule does not. Knee &
 Munro's constant exceeds the fitted one by a median 15 times at first order and 9 at second (never less than 6): partly
 the worst-case looseness above, partly the gap between the worst input state and this one. Since
-$r^* \propto a^{1/(q+1)}$, that alone predicts overshoots of about 3.9 and 2.1. The saturating rule adds the last two
+$r^* \propto a^{1/(q+1)}$, that alone predicts overshoots of about 3.8 and 2.1. The saturating rule adds the last three
 hits.
 
 | Trotter term | Rule | Order 1 | Order 2 | Hits |
 |:--|:--|--:|--:|--:|
-| Knee & Munro $a/r^q$ | additive (published) | 3.38 | 2.30 | 0/30 |
-| Knee & Munro $a/r^q$ | saturating | 6.21 | 2.55 | 0/30 |
-| fitted $C/r^q$ | additive | 0.87 | 1.09 | 28/30 |
-| fitted $C/r^q$ | saturating | 1.02 | 1.19 | 30/30 |
+| Knee & Munro $a/r^q$ | additive (published) | 3.33 | 2.24 | 0/30 |
+| Knee & Munro $a/r^q$ | saturating | 6.26 | 2.52 | 0/30 |
+| fitted $C/r^q$ | additive | 0.85 | 1.00 | 27/30 |
+| fitted $C/r^q$ | saturating | 1.01 | 1.11 | 30/30 |
 | actual $E_T(r)$ | additive | 1.00 | 1.00 | 23/30 |
-| actual $E_T(r)$ | saturating (predictor) | 1.00 | 1.20 | 30/30 |
+| actual $E_T(r)$ | saturating (predictor) | 1.00 | 1.00 | 30/30 |
 
 Table: Ablation over the 30 first- and second-order configurations: median predicted ÷ measured $r^*$ per order, and hits within one grid step. Additive: term $+\,p\,r$; saturating: $1 - (1 - \text{term})\,e^{-pr}$.
 

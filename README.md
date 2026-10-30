@@ -18,8 +18,8 @@ Questions 1 to 3 are complete, including one run on an IBM device, plus follow-u
   first order and 4× at second, at every chain length; the norm bound by 10²–10³× at orders 1–2
   and 10⁵–10⁸× at order 4, growing with n. Both reproduce Childs et al. on TFIM and XXZ chains.
 - **Optimal step count.** Under the FakeTorino noise model, the measured r\* ranges from 1 to 16
-  and grows with evolution time. Knee & Munro's prediction overshoots it by a median 2.4×,
-  Avtandilyan & Pogosov's by 3.7× (orders 1 and 2; Knee & Munro's second order is our extension
+  and grows with evolution time. Knee & Munro's prediction overshoots it by a median 2.3×,
+  Avtandilyan & Pogosov's by 3.6× (orders 1 and 2; Knee & Munro's second order is our extension
   of their general form).
 - **Why.** An ablation pins it on the Trotter term: the analytic constant exceeds the initial
   state's actual one by a median 15× (first order) and 9× (second), and swapping only that
@@ -40,7 +40,7 @@ Questions 1 to 3 are complete, including one run on an IBM device, plus follow-u
   several times more slowly than the global damping it assumes.
 - **Better devices (follow-up).** With every Torino error rate scaled down by up to 100× (10-qubit
   TFIM), second order beats first at every level, and fourth order overtakes second only once errors
-  are 23–31× lower, more than the order of magnitude Avtandilyan & Pogosov estimate. The
+  are 20–26× lower, more than the order of magnitude Avtandilyan & Pogosov estimate. The
   semi-empirical predictor, run before these simulations (`results/noise_scaling_predicted.csv`),
   placed r\* within one grid step in all 45 configurations and picked the better order in 14 of 15.
   Both analytic formulas overshoot by the same factor at every noise level: their power law is right,
@@ -68,7 +68,12 @@ Questions 1 to 3 are complete, including one run on an IBM device, plus follow-u
   patches do not have. The qubits that idled longest picked up phase errors (⟨X_i⟩ changed sign on 14 sites). With
   the bonds in two layers (same unitary, same gates), a second pre-registered run on the same qubits passed (commit
   dca91f3, 42 s): r\* within one grid step at both orders, error at the predicted r\* 0.08–0.10 against 0.21 before,
-  still 1.4–2.4× the prediction.
+  still 1.4–2.4× the prediction. The device damps local observables no faster than the calibrated model; the remainder
+  is a deviation that circuits of both orders share, that no calibrated qubit property predicts, and that fixed coherent
+  over-rotations of about 0.05 rad per step (invisible to randomized benchmarking) reproduce in size.
+- **Layered circuits throughout.** Every simulation above uses layered circuits. Rerunning the sweeps that first used
+  chain order moved r\* by one grid step in 8 of 45 whole-state and 31 of 180 local-observable configurations, never by
+  more apart from one flat trajectory minimum, and changed no conclusion (`results/chain_order/` keeps the originals).
 
 ![Total error versus Trotter steps under device noise](figures/fig2_noisy_tradeoff.png)
 ![Predicted versus measured optimal step count](figures/fig3_predictions.png)
@@ -116,6 +121,8 @@ python scripts/run_hardware_long.py dry-run             # 100-qubit layout and p
 python scripts/run_hardware_long.py submit              # then `fetch`; used 98 s of device time
 python scripts/run_hardware_long.py dry-run hardware_long_layered   # the rerun with layered circuits; then
 python scripts/run_hardware_long.py submit hardware_long_layered    # `fetch hardware_long_layered`; 42 s
+python scripts/fetch_calibration.py results/hardware_long_layered_job.json   # its calibration (no QPU time)
+python scripts/coherent_errors.py                       # could coherent errors explain the rest? ~30 s
 ```
 
 ## Design notes
@@ -127,8 +134,10 @@ python scripts/run_hardware_long.py submit hardware_long_layered    # `fetch har
   schedule. Listed in chain order, the TFIM's ZZ bonds each share a qubit with the next and run one after another:
   about 0.2 µs per bond, 20 µs at 100 sites, with every site idling in a superposition for part of it.
   `trotter_circuit` therefore reorders each group into layers of disjoint support (`circuits.layered`: even bonds,
-  then odd bonds). Results before the 100-qubit rerun were produced in chain order (2 µs of staircase at 12 sites,
-  which the noise model includes); `trotter_circuit(..., layer=False)` rebuilds those circuits.
+  then odd bonds); for the XXZ chain the transpiled circuits come out identical either way. Every simulation sweep was first run in chain order (2 µs of
+  staircase at 12 sites, which the noise model includes) and then rerun layered; the chain-ordered results are kept in
+  `results/chain_order/`, and `trotter_circuit(..., layer=False)` rebuilds those circuits. The 12-qubit
+  `ibm_kingston` run used chain order, on the device and in its noise model alike.
 - **A hidden identity.** Second-order Trotter with the ZZ group outermost equals first-order
   Trotter conjugated by a half-step of ZZ. From |0...0>, Z-type observables then cannot tell the
   two orders apart (`tests/test_core.py` checks this). The X-outer grouping avoids it.
