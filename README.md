@@ -69,8 +69,10 @@ Questions 1 to 3 are complete, including one run on an IBM device, plus follow-u
   the bonds in two layers (same unitary, same gates), a second pre-registered run on the same qubits passed (commit
   dca91f3, 42 s): r\* within one grid step at both orders, error at the predicted r\* 0.08–0.10 against 0.21 before,
   still 1.4–2.4× the prediction. The device damps local observables no faster than the calibrated model; the remainder
-  is a deviation that circuits of both orders share, that no calibrated qubit property predicts, and that fixed coherent
-  over-rotations of about 0.05 rad per step (invisible to randomized benchmarking) reproduce in size.
+  is a deviation that circuits of both orders share and that no calibrated qubit property predicts. It is not a fixed
+  coherent error per step: over-rotations fitted at r = 2–4 predict r = 5–10 worse than no correction
+  (`scripts/fit_coherent.py`). Its pattern over the chain jumps with r, most sharply where the transpiler starts
+  putting an X pulse in every step on a third of the sites (`scripts/compiled_structure.py`).
 - **Layered circuits throughout.** Every simulation above uses layered circuits. Rerunning the sweeps that first used
   chain order moved r\* by one grid step in 8 of 45 whole-state and 31 of 180 local-observable configurations, never by
   more apart from one flat trajectory minimum, and changed no conclusion (`results/chain_order/` keeps the originals).
@@ -123,6 +125,8 @@ python scripts/run_hardware_long.py dry-run hardware_long_layered   # the rerun 
 python scripts/run_hardware_long.py submit hardware_long_layered    # `fetch hardware_long_layered`; 42 s
 python scripts/fetch_calibration.py results/hardware_long_layered_job.json   # its calibration (no QPU time)
 python scripts/coherent_errors.py                       # could coherent errors explain the rest? ~30 s
+python scripts/fit_coherent.py config.yaml coherent_fit  # do fitted coherent errors predict held-out r? ~2 min
+python scripts/compiled_structure.py results/hardware_long_layered_job.json --recompile  # executed gates, no QPU time
 ```
 
 ## Design notes
