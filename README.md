@@ -75,7 +75,14 @@ Questions 1 to 3 are complete, including one run on an IBM device, plus follow-u
   putting an X pulse in every step on a third of the sites (`scripts/compiled_structure.py`). A pre-registered repeat
   of the same executed circuits four days later (commit 815f925, 74 s), each run twice in shuffled order, shows it
   belongs to each circuit, not to drift: two copies of a circuit deviate alike (median correlation 0.96), circuits that
-  ran one after the other do not (0.27). The repeat passed the rerun's criteria again with the same optima.
+  ran one after the other do not (0.27). The repeat passed the rerun's criteria again with the same optima. It is
+  coherent: a pre-registered twirled run of the same circuits (commit a6d3f12, 42 s) cut the part of the deviation
+  that is not damping from 0.080 to 0.022 and erased its pattern (correlation 0.13), turning it into damping about
+  20% faster per step than the calibrated model's (`hardware.twirl_test`).
+- **A second device (pre-registered).** The layered design on a fresh 100-site chain of `ibm_kingston` (commit 042b033,
+  43 s; `ibm_marrakesh` had only 64 clean sites that day) kept the optimum, 4 and 3 against a predicted 5 and 4, with
+  no damaged site, but missed the error bound at first order: 0.108 against 0.10 at the predicted r\* (0.094 at second
+  order). The remainder looks as on `ibm_fez`, shared by both orders and not damping, and is larger (1.7–3.3×).
 - **Layered circuits throughout.** Every simulation above uses layered circuits. Rerunning the sweeps that first used
   chain order moved r\* by one grid step in 8 of 45 whole-state and 31 of 180 local-observable configurations, never by
   more apart from one flat trajectory minimum, and changed no conclusion (`results/chain_order/` keeps the originals).
@@ -88,6 +95,7 @@ Questions 1 to 3 are complete, including one run on an IBM device, plus follow-u
 ![Light-cone patches against full simulations, and r* against chain length](figures/fig7_patches.png)
 ![A 100-qubit chain on ibm_fez against the predictions made before the run](figures/fig8_fez_100q.png)
 ![The same chain with layered circuits](figures/fig9_fez_layered.png)
+![A 100-qubit chain on ibm_kingston, predicted before the run](figures/fig10_kingston.png)
 
 ## Layout
 
@@ -128,6 +136,8 @@ python scripts/run_hardware_long.py dry-run hardware_long_layered   # the rerun 
 python scripts/run_hardware_long.py submit hardware_long_layered    # `fetch hardware_long_layered`; 42 s
 python scripts/fetch_calibration.py results/hardware_long_layered_job.json   # its calibration (no QPU time)
 python scripts/run_hardware_long.py dry-run hardware_repeat  # the same circuits twice, shuffled; then submit, fetch
+python scripts/run_hardware_long.py dry-run hardware_twirl   # the same circuits, Pauli-twirled; then submit, fetch
+python scripts/run_hardware_long.py dry-run hardware_kingston  # a fresh 100-site chain on ibm_kingston; 43 s
 python scripts/coherent_errors.py                       # could coherent errors explain the rest? ~30 s
 python scripts/fit_coherent.py config.yaml coherent_fit  # do fitted coherent errors predict held-out r? ~2 min
 python scripts/compiled_structure.py results/hardware_long_layered_job.json --recompile  # executed gates, no QPU time
