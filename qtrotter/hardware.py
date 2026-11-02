@@ -166,6 +166,38 @@ def reproducibility(values, pubs, prediction="patches"):
     return pairs, {**med.to_dict(), "verdict": call}
 
 
+def non_damping(values, source="hardware", prediction="patches"):
+    """Per (order, r): the device values minus the prediction shrunk by the least-squares factor k
+    (device ~ k * prediction), i.e. what is left once any extra uniform damping is allowed for.
+    Returns (residual per observable, table of k and nd_gap, the residual's RMS without shot noise)."""
+    dev, var, pred = wide(values, source), wide(values, source, "std") ** 2, wide(values, prediction)
+    k = (dev * pred).sum(axis=1) / (pred**2).sum(axis=1)
+    res = dev - pred.mul(k, axis=0)
+    return res, pd.DataFrame({"k": k, "nd_gap": np.sqrt(np.maximum((res**2 - var).mean(axis=1), 0.0))})
+
+
+def twirl_test(twirled, untwirled, prediction="patches"):
+    """Does Pauli twirling remove a run's deviation from its prediction?
+
+    Twirling turns coherent gate errors into stochastic ones, which only damp local observables, so
+    a coherent remainder should leave as extra damping. Compares the twirled run's non-damping
+    deviation (non_damping) per circuit with an untwirled run's of the same circuits. Returns
+    (table, verdict): the table has both nd_gaps and the correlation of the two residuals per
+    circuit; the pre-registered call is "coherent" if the median twirled nd_gap is at most half the
+    untwirled one and the median correlation below 0.5, "not coherent" if it is at least 3/4 of it
+    and the correlation at least 0.7, "partly" otherwise.
+    """
+    res_t, t = non_damping(twirled, prediction=prediction)
+    res_u, u = non_damping(untwirled, prediction=prediction)
+    table = pd.DataFrame({"k_twirled": t.k, "k_untwirled": u.k, "nd_gap_twirled": t.nd_gap,
+                          "nd_gap_untwirled": u.nd_gap,
+                          "corr": [np.corrcoef(res_t.loc[i], res_u.loc[i])[0, 1] for i in t.index]}, index=t.index)
+    ratio, corr = table.nd_gap_twirled.median() / table.nd_gap_untwirled.median(), table["corr"].median()
+    call = ("coherent" if ratio <= 0.5 and corr < 0.5 else "not coherent" if ratio >= 0.75 and corr >= 0.7
+            else "partly")
+    return table, {"nd_gap_ratio": ratio, "corr": corr, "verdict": call}
+
+
 def clean_graph(backend, max_2q_error=0.01, max_readout_error=0.05):
     """Couplers of `backend` with two-qubit error at most `max_2q_error`, between qubits whose readout
     error is at most `max_readout_error`: {qubit: set of neighbours}."""

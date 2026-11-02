@@ -18,7 +18,8 @@ S_circuits.csv, S_job.json.
 
 `circuits_from` resubmits the very circuits of an earlier job instead of recompiling them; `copies`
 runs every circuit that many times, and `shuffle_seed` puts each copy's circuits in a random order
-(fetch then writes copy c as source hardware_c, and their mean as hardware).
+(fetch then writes copy c as source hardware_c, and their mean as hardware). `twirling` sets the
+Estimator's twirling options (Pauli twirling of the two-qubit gate layers).
 """
 import json
 import os
@@ -138,6 +139,8 @@ if mode in ("dry-run", "submit"):
         estimator.options.default_shots = run["shots"]
         estimator.options.resilience_level = run["resilience_level"]
         estimator.options.max_execution_time = run["max_execution_time"]
+        for key, value in run.get("twirling", {}).items():  # e.g. enable_gates, num_randomizations
+            setattr(estimator.options.twirling, key, value)
         job = estimator.run(pubs)
         record.update({"job_id": job.job_id(), "submitted": datetime.now(timezone.utc).isoformat(),
                        "calibrated_at_submission": calibrated, "observables": names,

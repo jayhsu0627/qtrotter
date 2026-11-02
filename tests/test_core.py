@@ -210,6 +210,33 @@ def test_reproducibility():
     assert verdict["verdict"] == "drift"
 
 
+def test_twirl_test():
+    """A fixed deviation that twirling turns into a uniform shrink gives "coherent"; one it leaves
+    alone gives "not coherent"."""
+    import pandas as pd
+    from qtrotter.hardware import twirl_test
+
+    names, rng = [f"Z{i}" for i in range(200)], np.random.default_rng(2)
+    circuits = [(o, r) for o in (1, 2) for r in (2, 3, 4)]
+    pred = {c: rng.uniform(-1, 1, len(names)) for c in circuits}
+    fixed = {c: rng.normal(0, 0.08, len(names)) for c in circuits}
+
+    def table(device):
+        rows = [{"source": "exact", "order": 0, "r": 0, "observable": k, "value": 0.0} for k in names]
+        for c in circuits:
+            rows += [{"source": "patches", "order": c[0], "r": c[1], "observable": k, "value": v}
+                     for k, v in zip(names, pred[c])]
+            rows += [{"source": "hardware", "order": c[0], "r": c[1], "observable": k, "value": v, "std": 0.01}
+                     for k, v in zip(names, device(c) + rng.normal(0, 0.01, len(names)))]
+        return pd.DataFrame(rows)
+
+    untwirled = table(lambda c: pred[c] + fixed[c])
+    _, verdict = twirl_test(table(lambda c: 0.9 * pred[c]), untwirled)
+    assert verdict["verdict"] == "coherent", verdict
+    _, verdict = twirl_test(table(lambda c: 0.9 * pred[c] + fixed[c]), untwirled)
+    assert verdict["verdict"] == "not coherent", verdict
+
+
 def test_longest_path():
     """A 7-site line with a 2-site branch off site 3: the longest simple path is the line."""
     from qtrotter.hardware import longest_path

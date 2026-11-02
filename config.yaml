@@ -312,6 +312,36 @@ hardware_repeat:
   seed: 1
   layer: true
 
+# Is the remainder coherent? The 14 executed circuits of hardware_long_layered again (circuits_from),
+# once, in a random order, with Pauli twirling of the two-qubit gate layers: 32 randomizations x 128
+# shots. Twirling turns coherent gate errors into stochastic ones, which only shrink local
+# observables, so it tests the part of each circuit's deviation that a uniform shrink cannot absorb
+# (hardware.non_damping: device - k * prediction). Untwirled, that part has a median RMS of 0.080 per
+# circuit (hardware_repeat; 0.077 on 2026-10-29) and comes back alike (correlation 0.96 between the
+# repeat's copies, 0.83 between runs four days apart). Pre-registered verdict (hardware.twirl_test,
+# against hardware_repeat): "coherent" if the twirled median is at most half the untwirled one and the
+# median correlation with the untwirled residual below 0.5; "not coherent" if at least 3/4 of it and
+# the correlation at least 0.7; "partly" otherwise. Also re-checked: r* within one grid step of the
+# prediction and the error there below 0.10, both orders.
+hardware_twirl:
+  backend: ibm_fez
+  model: tfim
+  layout_from: results/hardware_long_layered_job.json
+  circuits_from: results/hardware_long_layered_job.json
+  shuffle_seed: 3
+  twirling: {enable_gates: true, num_randomizations: 32, shots_per_randomization: 128, strategy: active-accum}
+  times: [1.0]
+  orders: [1, 2]
+  steps: [2, 3, 4, 5, 6, 8, 10]
+  width: 10
+  stride: 2
+  shots: 4096
+  max_execution_time: 90
+  resilience_level: 1
+  optimization_level: 2
+  seed: 1
+  layer: true
+
 # Second device: the layered run's design on ibm_kingston, which has run no 100-qubit chain (question 3
 # used 12 of its qubits). The chain is found afresh from kingston's calibration, with the thresholds of
 # hardware_long (on 2026-11-02 they gave 105 sites on kingston but only 64 on ibm_marrakesh, where 15
