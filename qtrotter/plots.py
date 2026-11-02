@@ -279,7 +279,7 @@ def noise_reach(resp, observables, order=1, v=2.0, save=None):
         ax.set_xlim(-0.5, n - 0.5)
         ax.set_title(f"t = {t:g}  (shaded: within v t = {v * t:g} sites)")
         ax.set_xlabel("site with noise")
-    np.atleast_1d(axes)[0].set_ylabel("change per unit noise per step")
+    np.atleast_1d(axes)[0].set_ylabel(r"RMS $|\Delta\langle O\rangle|\,/\,(p\,r)$")
     np.atleast_1d(axes)[-1].legend(loc="lower right", fontsize=8, ncol=2)
     fig.tight_layout()
     if save:

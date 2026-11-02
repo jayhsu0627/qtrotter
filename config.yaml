@@ -4,7 +4,7 @@
 models:
   tfim: {J: 1.0, h: 1.0}
   xxz: {delta: 0.5}
-  mfim: {J: 1.0, hx: 0.9045, hz: 0.809}   # non-integrable (Kim & Huse 2013); level-spacing ratio 0.53 at n = 12
+  mfim: {J: 1.0, hx: 0.9045, hz: 0.809}   # Kim & Huse 2013 bulk couplings; level-spacing ratio 0.53 at n = 12
 
 # Question 1: noiseless Trotter error against the commutator and norm bounds.
 noiseless:
