@@ -72,7 +72,10 @@ Questions 1 to 3 are complete, including one run on an IBM device, plus follow-u
   is a deviation that circuits of both orders share and that no calibrated qubit property predicts. It is not a fixed
   coherent error per step: over-rotations fitted at r = 2–4 predict r = 5–10 worse than no correction
   (`scripts/fit_coherent.py`). Its pattern over the chain jumps with r, most sharply where the transpiler starts
-  putting an X pulse in every step on a third of the sites (`scripts/compiled_structure.py`).
+  putting an X pulse in every step on a third of the sites (`scripts/compiled_structure.py`). A pre-registered repeat
+  of the same executed circuits four days later (commit 815f925, 74 s), each run twice in shuffled order, shows it
+  belongs to each circuit, not to drift: two copies of a circuit deviate alike (median correlation 0.96), circuits that
+  ran one after the other do not (0.27). The repeat passed the rerun's criteria again with the same optima.
 - **Layered circuits throughout.** Every simulation above uses layered circuits. Rerunning the sweeps that first used
   chain order moved r\* by one grid step in 8 of 45 whole-state and 31 of 180 local-observable configurations, never by
   more apart from one flat trajectory minimum, and changed no conclusion (`results/chain_order/` keeps the originals).
