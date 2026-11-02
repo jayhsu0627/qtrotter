@@ -312,6 +312,31 @@ hardware_repeat:
   seed: 1
   layer: true
 
+# Second device: the layered run's design on ibm_kingston, which has run no 100-qubit chain (question 3
+# used 12 of its qubits). The chain is found afresh from kingston's calibration, with the thresholds of
+# hardware_long (on 2026-11-02 they gave 105 sites on kingston but only 64 on ibm_marrakesh, where 15
+# qubits read out with error above 0.1). Pre-registered
+# as for hardware_long_layered: the device's r* within one grid step of the patch prediction at
+# both orders, its RMS error at the predicted r* below 0.10 at both orders, and at most 5 of the
+# chain's sites with <X_i> below 0.3x the prediction.
+hardware_kingston:
+  backend: ibm_kingston
+  model: tfim
+  max_2q_error: 0.02
+  max_readout_error: 0.1
+  max_sites: 100
+  times: [1.0]
+  orders: [1, 2]
+  steps: [2, 3, 4, 5, 6, 8, 10]
+  width: 10
+  stride: 2
+  shots: 4096
+  max_execution_time: 90
+  resilience_level: 1
+  optimization_level: 2
+  seed: 1
+  layer: true
+
 # Follow-up: could fixed coherent errors explain what remains between the layered ibm_fez run and
 # its prediction? Per-bond ZZ over-rotations and per-site Z phases per step, std in rad, as
 # (sigma_zz, sigma_z); noiseless statevector otherwise.
