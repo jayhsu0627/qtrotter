@@ -79,5 +79,19 @@ def xxz(n, delta=0.5, J=1.0):
     return Model("xxz", n, (bonds(0), bonds(1)), ("01" * n)[:n], {"J": J, "delta": delta})
 
 
+def mfim(n, J=1.0, hx=0.9045, hz=0.809):
+    """-J sum Z_i Z_{i+1} - hx sum X_i - hz sum Z_i, from |0...0>: the mixed-field Ising chain.
+
+    Non-integrable for hz != 0; the default couplings are Kim & Huse's (PRL 111, 127205, 2013), up
+    to an overall sign, which does not change real observables from a real initial state. Groups:
+    [X field, ZZ bonds + Z field]; the Z-type terms commute, so the TFIM's two-group structure,
+    and the merging of second-order half-steps, carry over.
+    """
+    x = SparsePauliOp.from_sparse_list([("X", [i], -hx) for i in range(n)], n)
+    z = SparsePauliOp.from_sparse_list([("ZZ", [i, i + 1], -J) for i in range(n - 1)]
+                                       + [("Z", [i], -hz) for i in range(n)], n)
+    return Model("mfim", n, (x, z), "0" * n, {"J": J, "hx": hx, "hz": hz})
+
+
 def build(name, n, **params):
-    return {"tfim": tfim, "xxz": xxz}[name](n, **params)
+    return {"tfim": tfim, "xxz": xxz, "mfim": mfim}[name](n, **params)

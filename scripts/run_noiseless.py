@@ -1,8 +1,8 @@
 """Question 1: noiseless Trotter error versus r, with commutator and norm bounds.
 
-Writes results/noiseless.csv, one row per (model, n, t, order, r).
+Writes results/noiseless.csv (or the section's `output`), one row per (model, n, t, order, r).
 
-    python scripts/run_noiseless.py [config.yaml]
+    python scripts/run_noiseless.py [config.yaml] [section]     # section defaults to "noiseless"
 """
 import os
 import sys
@@ -23,7 +23,7 @@ from qtrotter import Propagator, build, state_metrics  # noqa: E402
 from qtrotter.bounds import commutator_bound, commutator_norms, norm_bound  # noqa: E402
 
 cfg = yaml.safe_load(open(sys.argv[1] if len(sys.argv) > 1 else ROOT / "config.yaml"))
-run = cfg["noiseless"]
+run = cfg[sys.argv[2] if len(sys.argv) > 2 else "noiseless"]
 rows = []
 for name in run["models"]:
     for n in run["sizes"]:
@@ -45,6 +45,6 @@ for name in run["models"]:
                     rows.append(row | norms)
         print(f"{name} n={n}: {time.perf_counter() - start:.1f} s", flush=True)
 
-out = ROOT / "results" / "noiseless.csv"
+out = ROOT / "results" / run.get("output", "noiseless.csv")
 pd.DataFrame(rows).to_csv(out, index=False)
 print("wrote", out, len(rows), "rows")

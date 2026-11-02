@@ -3,6 +3,8 @@ from qiskit import QuantumCircuit, transpile
 from qiskit.circuit.library import PauliEvolutionGate
 from qiskit.synthesis import LieTrotter, SuzukiTrotter
 
+from .formulas import sequence
+
 
 def layered(group):
     """The same group with its terms reordered into layers of disjoint support (first fit).
@@ -35,8 +37,12 @@ def trotter_circuit(model, order, reps, t, layer=True):
     for i, bit in enumerate(model.init_bits):
         if bit == "1":
             qc.x(i)
-    synth = LieTrotter(reps=reps) if order == 1 else SuzukiTrotter(order=order, reps=reps)
     groups = [layered(g) for g in model.groups] if layer else list(model.groups)
+    if order == "4y":  # not in Qiskit's synthesis: one evolution gate per (merged) stage
+        for j, a in sequence(order, len(groups), reps):
+            qc.append(PauliEvolutionGate(groups[j], time=a * t / reps), range(model.n))
+        return qc
+    synth = LieTrotter(reps=reps) if order == 1 else SuzukiTrotter(order=order, reps=reps)
     qc.append(PauliEvolutionGate(groups, time=t, synthesis=synth), range(model.n))
     return qc
 

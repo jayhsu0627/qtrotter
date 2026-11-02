@@ -4,6 +4,7 @@
 models:
   tfim: {J: 1.0, h: 1.0}
   xxz: {delta: 0.5}
+  mfim: {J: 1.0, hx: 0.9045, hz: 0.809}   # non-integrable (Kim & Huse 2013); level-spacing ratio 0.53 at n = 12
 
 # Question 1: noiseless Trotter error against the commutator and norm bounds.
 noiseless:
@@ -232,6 +233,67 @@ noisy_xxz:
   device: CPU
   precision: double
   output: noisy_xxz.csv
+
+# Follow-up: a non-integrable chain. The mixed-field Ising model (models.mfim) through the same
+# noiseless, noisy and single-site-noise sweeps as the TFIM, to check that the overshoot of the
+# analytic formulas, the semi-empirical predictor and the light-cone noise map do not rely on
+# integrability.
+#   python scripts/run_noiseless.py config.yaml noiseless_mfim
+#   python scripts/run_noisy.py config.yaml noisy_mfim
+#   python scripts/run_noise_response.py config.yaml noise_response_mfim
+noiseless_mfim:
+  models: [mfim]
+  sizes: [4, 6, 8, 10, 12]
+  times: [1.0, 2.0, 4.0]
+  orders: [1, 2, 4]
+  steps: [1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]
+  spectral_norm_max_n: 10
+  output: noiseless_mfim.csv
+
+noisy_mfim:
+  backend: FakeTorino
+  models: [mfim]
+  sizes: [4, 6, 8, 10, 12]
+  times: [1.0, 2.0, 4.0]
+  orders: [1, 2, 4]
+  steps: [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24, 32]
+  optimization_level: 2
+  schedule: true
+  seed: 1
+  device: auto
+  precision: double
+  output: noisy_mfim.csv
+
+noise_response_mfim:
+  models: [mfim]
+  sizes: [12]
+  times: [1.0, 2.0, 4.0]
+  orders: [1, 2]
+  steps: [2, 4, 8, 16, 32, 64]
+  p: 0.001
+  device: GPU
+  precision: double
+  output: noise_response_mfim.csv
+
+# Follow-up: a cheaper fourth order. The three-stage triple jump ("4y", formulas.stages: three ZZ
+# layers per step against Suzuki's five) on the noise_scaling sweep's chain and scales. Its
+# crossover with second order was predicted before this sweep ran (scripts/predict_crossover.py).
+#   python scripts/predict_crossover.py; python scripts/run_noisy.py config.yaml noise_scaling_4y
+noise_scaling_4y:
+  backend: FakeTorino
+  noise_scales: [1.0, 0.3, 0.1, 0.03, 0.01]
+  models: [tfim]
+  sizes: [10]
+  times: [1.0, 2.0, 4.0]
+  orders: ["4y"]
+  steps: [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48]
+  max_steps: {"4y": 48}
+  optimization_level: 2
+  schedule: true
+  seed: 1
+  device: CPU
+  precision: double
+  output: noise_scaling_4y.csv
 
 # Question 3: one chain on a real device and on that device's own noise model.
 hardware:

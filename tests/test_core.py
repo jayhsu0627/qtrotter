@@ -8,6 +8,7 @@ from scipy.sparse.linalg import expm_multiply
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from qtrotter import Model, Propagator, state_metrics, tfim, xxz  # noqa: E402
+from qtrotter.models import mfim  # noqa: E402
 from qtrotter.bounds import commutator_bound, commutator_norms, norm_bound  # noqa: E402
 from qtrotter.circuits import (choose_layout, device_circuit, logical_circuit,  # noqa: E402
                                trotter_circuit)
@@ -18,11 +19,24 @@ def overlap(a, b):
 
 
 def test_numpy_formulas_match_qiskit_synthesis():
-    for model in (tfim(5), xxz(5)):
+    for model in (tfim(5), xxz(5), mfim(5)):
         prop = Propagator(model)
-        for order in (1, 2, 4):
+        for order in (1, 2, 4, "4y"):
             sv = Statevector(logical_circuit(trotter_circuit(model, order, 3, 0.7))).data
             assert overlap(prop.trotter_state(order, 3, 0.7), sv) > 1 - 1e-10, (model.name, order)
+
+
+def test_triple_jump():
+    """The three-stage fourth order converges as r^-4 and costs three ZZ layers per step."""
+    from qtrotter.formulas import sequence
+
+    for model in (tfim(6), mfim(6)):
+        prop = Propagator(model)
+        exact = prop.exact_state(1.0)
+        err = [1 - overlap(exact, prop.trotter_state("4y", r, 1.0)) for r in (8, 16)]
+        slope = np.log2(err[0] / err[1]) / 2  # infidelity ~ error^2
+        assert 3.6 < slope < 4.4, (model.name, slope)
+        assert sum(j == 1 for j, _ in sequence("4y", 2, 5)) == 15
 
 
 def test_layered_groups():

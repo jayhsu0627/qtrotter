@@ -7,7 +7,17 @@ import numpy as np
 
 
 def stages(order, n_groups):
-    """One Trotter step as a time-ordered list of (group, fraction of dt)."""
+    """One Trotter step as a time-ordered list of (group, fraction of dt).
+
+    order "4y" is the three-stage fourth-order triple jump (Yoshida; Forest & Ruth),
+    S2(w1 dt) S2(w0 dt) S2(w1 dt) with w1 = 1 / (2 - 2^(1/3)), w0 = 1 - 2 w1: three ZZ
+    layers per step after merging, against Suzuki's five.
+    """
+    if order == "4y":
+        w1 = 1 / (2 - 2 ** (1 / 3))
+        inner = stages(2, n_groups)
+        return ([(j, a * w1) for j, a in inner] + [(j, a * (1 - 2 * w1)) for j, a in inner]
+                + [(j, a * w1) for j, a in inner])
     if order == 1:
         return [(j, 1.0) for j in range(n_groups)]
     if order == 2:
