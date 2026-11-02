@@ -137,6 +137,35 @@ def leave_out(values, drop, prediction="patches"):
     return pd.DataFrame(rows)
 
 
+def reproducibility(values, pubs, prediction="patches"):
+    """Does a circuit's deviation from the prediction come back when the same circuit runs again?
+
+    `pubs`: the job record's pub list in execution order, each with its `copy` (results of copy c
+    under source hardware_c). Every run's deviation is its device values minus the prediction, over
+    all local Paulis. Returns (pairs, verdict): pairs has the correlation of every two runs' deviations
+    and the kind of pair, 'same' (two copies of one circuit), 'same_r' (same r, other order),
+    'neighbour' (ran one after the other, different r) or 'other'; verdict is the median per kind
+    and the pre-registered call: "circuit" if same >= 0.8 and same >= neighbour + 0.3, "drift" if
+    neighbour >= same or same < 0.5, "mixed" otherwise.
+    """
+    pred = wide(values, prediction)
+    dev = [(wide(values, f"hardware_{p['copy']}") - pred).loc[(p["order"], p["r"])].to_numpy() for p in pubs]
+    rows = []
+    for i in range(len(pubs)):
+        for j in range(i + 1, len(pubs)):
+            a, b = pubs[i], pubs[j]
+            kind = ("same" if (a["order"], a["r"]) == (b["order"], b["r"]) else "same_r" if a["r"] == b["r"]
+                    else "neighbour" if j == i + 1 else "other")
+            rows.append({"first": i, "second": j, "kind": kind, "order": (a["order"], b["order"]),
+                         "r": (a["r"], b["r"]), "corr": float(np.corrcoef(dev[i], dev[j])[0, 1])})
+    pairs = pd.DataFrame(rows)
+    med = pairs.groupby("kind")["corr"].median()
+    same, neighbour = med["same"], med["neighbour"]
+    call = ("circuit" if same >= 0.8 and same >= neighbour + 0.3
+            else "drift" if neighbour >= same or same < 0.5 else "mixed")
+    return pairs, {**med.to_dict(), "verdict": call}
+
+
 def clean_graph(backend, max_2q_error=0.01, max_readout_error=0.05):
     """Couplers of `backend` with two-qubit error at most `max_2q_error`, between qubits whose readout
     error is at most `max_readout_error`: {qubit: set of neighbours}."""

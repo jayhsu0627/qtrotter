@@ -179,6 +179,37 @@ def test_gap_table():
     assert leave_out(values, []).observables.iloc[0] == len(names)
 
 
+def test_reproducibility():
+    """Runs whose deviation is fixed by the circuit give the verdict "circuit"; runs whose
+    deviation follows a slow drift in time give "drift"."""
+    import pandas as pd
+    from qtrotter.hardware import reproducibility
+
+    names, rng = [f"Z{i}" for i in range(50)], np.random.default_rng(1)
+    circuits = [(o, r) for o in (1, 2) for r in (2, 3, 4)]
+    runs = [(c, circuits[i]) for c in range(2) for i in rng.permutation(len(circuits))]
+    pubs = [{"t": 1.0, "order": o, "r": r, "copy": c} for c, (o, r) in runs]
+    rows = [{"source": "exact", "order": 0, "r": 0, "observable": k, "value": 0.0} for k in names]
+    rows += [{"source": "patches", "order": o, "r": r, "observable": k, "value": 0.0}
+             for o, r in circuits for k in names]
+
+    def table(deviation):
+        out = list(rows)
+        for k, p in enumerate(pubs):
+            d = deviation(k, p)
+            out += [{"source": f"hardware_{p['copy']}", "order": p["order"], "r": p["r"], "observable": n,
+                     "value": v, "std": 0.01} for n, v in zip(names, d)]
+        return pd.DataFrame(out)
+
+    fixed = {c: rng.normal(0, 0.1, len(names)) for c in circuits}
+    noise = lambda: rng.normal(0, 0.01, len(names))
+    _, verdict = reproducibility(table(lambda k, p: fixed[(p["order"], p["r"])] + noise()), pubs)
+    assert verdict["verdict"] == "circuit"
+    walk = np.cumsum(rng.normal(0, 0.1, (len(pubs), len(names))), axis=0)
+    _, verdict = reproducibility(table(lambda k, p: walk[k] + noise()), pubs)
+    assert verdict["verdict"] == "drift"
+
+
 def test_longest_path():
     """A 7-site line with a 2-site branch off site 3: the longest simple path is the line."""
     from qtrotter.hardware import longest_path

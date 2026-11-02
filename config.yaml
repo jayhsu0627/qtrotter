@@ -284,6 +284,34 @@ hardware_long_layered:
   seed: 1
   layer: true
 
+# Repeat of hardware_long_layered with the very circuits that ran (taken from that job, not
+# recompiled: today's transpile differs at r = 10), each twice, each copy's 14 circuits in their own
+# random order (copy 0's, then copy 1's). Tests whether a circuit's deviation from the prediction
+# belongs to the circuit or to when it ran: fit_coherent.py found it changes with r in jumps but is
+# shared by the two orders. Pre-registered verdict (hardware.reproducibility): "circuit" if the two
+# copies of a circuit correlate at a median >= 0.8 and by >= 0.3 more than circuits of different r
+# that ran next to each other; "drift" if neighbours correlate at least as well as copies, or copies
+# below 0.5; "mixed" otherwise. Also re-checked: the device's r* within one grid step of the patch
+# prediction from today's calibration, and its error there below 0.10, both orders.
+hardware_repeat:
+  backend: ibm_fez
+  model: tfim
+  layout_from: results/hardware_long_layered_job.json
+  circuits_from: results/hardware_long_layered_job.json
+  copies: 2
+  shuffle_seed: 2
+  times: [1.0]
+  orders: [1, 2]
+  steps: [2, 3, 4, 5, 6, 8, 10]
+  width: 10
+  stride: 2
+  shots: 4096
+  max_execution_time: 120
+  resilience_level: 1
+  optimization_level: 2
+  seed: 1
+  layer: true
+
 # Follow-up: could fixed coherent errors explain what remains between the layered ibm_fez run and
 # its prediction? Per-bond ZZ over-rotations and per-site Z phases per step, std in rad, as
 # (sigma_zz, sigma_z); noiseless statevector otherwise.

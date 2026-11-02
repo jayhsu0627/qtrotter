@@ -15,6 +15,10 @@ patches (exact, noiseless Trotter and noisy values), and the global-damping esti
 (every value shrunk by exp(-p r), p the per-step gate error of the whole chain) for comparison.
 Outputs in results/, for section S: S_values.csv (long format, as hardware_values.csv),
 S_circuits.csv, S_job.json.
+
+`circuits_from` resubmits the very circuits of an earlier job instead of recompiling them; `copies`
+runs every circuit that many times, and `shuffle_seed` puts each copy's circuits in a random order
+(fetch then writes copy c as source hardware_c, and their mean as hardware).
 """
 import json
 import os
@@ -118,7 +122,18 @@ if mode in ("dry-run", "submit"):
 
     else:
         record = json.load(open(job_file))
-        names, pubs = hw.estimator_pubs(jobs, paulis)
+        if "circuits_from" in run:  # the very circuits of an earlier job, not recompiled
+            source = json.load(open(ROOT / run["circuits_from"]))
+            names, meta = source["observables"], source["pubs"]
+            pubs = [tuple(p[:2]) for p in service.job(source["job_id"]).inputs["pubs"]]
+        else:
+            names, pubs = hw.estimator_pubs(jobs, paulis)
+            meta = [{"t": j["t"], "order": j["order"], "r": j["r"]} for j in jobs]
+        # `copies` runs of every circuit, one after another, each in its own random order.
+        rng = np.random.default_rng(run.get("shuffle_seed"))
+        runs = [(c, i) for c in range(run.get("copies", 1))
+                for i in (rng.permutation(len(pubs)) if "shuffle_seed" in run else range(len(pubs)))]
+        pubs, meta = [pubs[i] for _, i in runs], [dict(meta[i], copy=c) for c, i in runs]
         estimator = EstimatorV2(mode=backend)
         estimator.options.default_shots = run["shots"]
         estimator.options.resilience_level = run["resilience_level"]
@@ -126,7 +141,7 @@ if mode in ("dry-run", "submit"):
         job = estimator.run(pubs)
         record.update({"job_id": job.job_id(), "submitted": datetime.now(timezone.utc).isoformat(),
                        "calibrated_at_submission": calibrated, "observables": names,
-                       "pubs": [{"t": j["t"], "order": j["order"], "r": j["r"]} for j in jobs]})
+                       "pubs": [{k: int(v) if k != "t" else float(v) for k, v in m.items()} for m in meta]})
         json.dump(record, open(job_file, "w"), indent=1)
         print("submitted job", job.job_id())
 
@@ -135,14 +150,20 @@ elif mode == "fetch":
     job = service.job(record["job_id"])
     print("status:", job.status())
     result = job.result()
+    copies = run.get("copies", 1)
     rows = []
     for pub, res in zip(record["pubs"], result):
-        rows += long_rows("hardware", pub["t"], pub["order"], pub["r"],
-                          dict(zip(record["observables"], res.data.evs)),
+        rows += long_rows("hardware" if copies == 1 else f"hardware_{pub['copy']}", pub["t"], pub["order"],
+                          pub["r"], dict(zip(record["observables"], res.data.evs)),
                           dict(zip(record["observables"], res.data.stds)))
+    rows = pd.DataFrame(rows)
+    if copies > 1:  # copy c as source hardware_c; their mean as hardware
+        g = rows.groupby(["t", "order", "r", "observable"], sort=False)
+        mean = pd.DataFrame({"value": g.value.mean(), "std": np.sqrt(g["std"].apply(lambda s: (s**2).sum())) / copies})
+        rows = pd.concat([rows, mean.reset_index().assign(source="hardware")])
     values = pd.read_csv(values_file)
-    values = values[values.source != "hardware"]
-    pd.concat([values, pd.DataFrame(rows)]).to_csv(values_file, index=False, float_format="%.8g")
+    values = values[~values.source.str.startswith("hardware")]
+    pd.concat([values, rows]).to_csv(values_file, index=False, float_format="%.8g")
     record["usage_seconds"] = job.usage()
     record["finished"] = datetime.now(timezone.utc).isoformat()
     json.dump(record, open(job_file, "w"), indent=1)

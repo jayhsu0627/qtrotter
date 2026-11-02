@@ -124,6 +124,7 @@ python scripts/run_hardware_long.py submit              # then `fetch`; used 98 
 python scripts/run_hardware_long.py dry-run hardware_long_layered   # the rerun with layered circuits; then
 python scripts/run_hardware_long.py submit hardware_long_layered    # `fetch hardware_long_layered`; 42 s
 python scripts/fetch_calibration.py results/hardware_long_layered_job.json   # its calibration (no QPU time)
+python scripts/run_hardware_long.py dry-run hardware_repeat  # the same circuits twice, shuffled; then submit, fetch
 python scripts/coherent_errors.py                       # could coherent errors explain the rest? ~30 s
 python scripts/fit_coherent.py config.yaml coherent_fit  # do fitted coherent errors predict held-out r? ~2 min
 python scripts/compiled_structure.py results/hardware_long_layered_job.json --recompile  # executed gates, no QPU time
