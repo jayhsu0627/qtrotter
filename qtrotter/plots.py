@@ -401,3 +401,156 @@ def hardware_long(table, title="", save=None, earlier=None, earlier_label=""):
     if save:
         fig.savefig(save, dpi=200, bbox_inches="tight")
     return fig
+
+
+def thesis_ladder(ladder, runs, save=None):
+    """Figure 1 candidate: where the gap between worst-case theory and the device goes.
+
+    `ladder`: rows (stage, order, r) for one chain, stages in order from the worst-case formula to
+    the device; drawn as r* per stage, one line per order. `runs`: rows (run, order, predicted,
+    device) of the error at the predicted r* on the 100-qubit chain, runs in order; drawn as the
+    device error per run against the (dashed) prediction."""
+    style()
+    fig, (a, b) = plt.subplots(1, 2, figsize=(9.6, 3.5), gridspec_kw={"width_ratios": [1.15, 1]})
+    stages = list(dict.fromkeys(ladder.stage))
+    for order, g in ladder.groupby("order"):
+        g = g.set_index("stage").loc[stages]
+        a.plot(range(len(stages)), g.r, color=ORDER_COLOR[order], marker=ORDER_MARKER[order], label=f"order {order}")
+        for x, r in enumerate(g.r):
+            a.annotate(f"{r:g}", (x, r), textcoords="offset points", xytext=(6, 4 if order == 1 else -11),
+                       fontsize=8.5, color=INK_2)
+    a.set_yscale("log", base=2)
+    a.set_yticks([2, 4, 8, 16, 32])
+    a.set_yticklabels(["2", "4", "8", "16", "32"])
+    a.set_xticks(range(len(stages)))
+    a.set_xticklabels(stages, fontsize=8)
+    a.set_ylabel("optimal step count r*")
+    a.legend(loc="upper right")
+    names = list(dict.fromkeys(runs.run))
+    for order, g in runs.groupby("order"):
+        order = int(order)
+        g = g.set_index("run").loc[names]
+        x = np.arange(len(names)) + (0.06 if order == 2 else -0.06)
+        b.plot(x, g.device, color=ORDER_COLOR[order], marker=ORDER_MARKER[order], label=f"device, order {order}")
+        b.plot(x, g.predicted, color=ORDER_COLOR[order], linestyle="--", linewidth=1.0, marker=ORDER_MARKER[order],
+               markerfacecolor="none", label=f"predicted, order {order}")
+    if "Kingston" in names:  # the last run is on another device
+        b.axvline(names.index("Kingston") - 0.5, color=INK_2, linewidth=0.8, linestyle=":")
+    b.set_xticks(range(len(names)))
+    b.set_xticklabels(names, fontsize=8)
+    b.set_ylim(0, None)
+    b.set_ylabel("RMS error at the predicted r*")
+    b.legend(loc="upper center", fontsize=8)
+    fig.tight_layout()
+    if save:
+        fig.savefig(save, dpi=200, bbox_inches="tight")
+    return fig
+
+
+def ablation_grid(ablations, save=None):
+    """Figure candidate: the ablation as a grid. One panel per model (`ablations`: {model: (the
+    predict.ablation frame for orders 1-2, step_apart)}, step_apart(predicted, measured) true within
+    one step of that model's grid); rows are the Trotter term, columns the combination rule; shade =
+    share of configurations within one grid step, text = that count and the median predicted /
+    measured r* at orders 1 and 2."""
+    style()
+    terms = [("knee_munro", "worst-case $a/r^q$"), ("fitted", "state's $C/r^q$"), ("E_T", "state's $E_T(r)$")]
+    rules = ["additive", "saturating"]
+    fig, axes = plt.subplots(1, len(ablations), figsize=(3.1 * len(ablations), 2.9), squeeze=False)
+    for ax, (model, (ab, step_apart)) in zip(axes[0], ablations.items()):
+        share = np.zeros((len(terms), len(rules)))
+        for i, (term, _) in enumerate(terms):
+            for j, rule in enumerate(rules):
+                col = ab[f"{term} {rule}"]
+                hits = sum(step_apart(p, m) for p, m in zip(col, ab.r_measured))
+                share[i, j] = hits / len(ab)
+                med = (col / ab.r_measured).groupby(ab.order).median()
+                ax.text(j, i, f"{hits}/{len(ab)}\n{med[1]:.2f} / {med[2]:.2f}", ha="center", va="center",
+                        fontsize=8, color="white" if share[i, j] > 0.55 else INK)
+        ax.imshow(share, cmap="Blues", vmin=0, vmax=1, aspect="auto")
+        ax.set_xticks(range(len(rules)))
+        ax.set_xticklabels(rules)
+        ax.set_yticks(range(len(terms)))
+        ax.set_yticklabels([lab for _, lab in terms] if ax is axes[0, 0] else [])
+        ax.grid(False)
+        ax.set_title(model)
+    fig.text(0.5, -0.02, "each cell: hits within one grid step; median predicted / measured r* at order 1 / order 2",
+             ha="center", fontsize=8, color=INK_2)
+    fig.tight_layout()
+    if save:
+        fig.savefig(save, dpi=200, bbox_inches="tight")
+    return fig
+
+
+def staircase(bonds, idle, damage, save=None):
+    """Figure candidate: the schedule that broke the first 100-qubit run. Left: when each bond's
+    first CZ starts (`bonds`: run, bond, first_cz_us; one circuit per run). Right: per site, the
+    idle time in superposition (`idle`: run, site, idle_us, median over a run's circuits) against
+    the device / predicted <X_i> of that run (`damage`: {run: array over sites})."""
+    from scipy.stats import spearmanr
+
+    style()
+    label = {"hardware_long": "ZZ bonds in chain order (first run)", "hardware_long_layered": "layered (rerun)"}
+    color = {"hardware_long": ORDER_COLOR[2], "hardware_long_layered": ORDER_COLOR[1]}
+    fig, (a, b) = plt.subplots(1, 2, figsize=(9.6, 3.4))
+    for run, g in bonds.groupby("run"):
+        a.plot(g.bond, g.first_cz_us, color=color[run], label=label[run])
+    a.set_xlabel("bond along the chain")
+    a.set_ylabel("first CZ starts at (µs)")
+    a.legend(loc="upper left")
+    for run, g in idle.groupby("run"):
+        x = g.sort_values("site").idle_us.to_numpy()
+        rho = spearmanr(x, damage[run])[0]
+        b.scatter(x, damage[run], s=12, color=color[run], label=f"{label[run]}: Spearman {rho:.2f}")
+    b.axhline(1, color=INK_2, linewidth=0.8, linestyle=":")
+    b.set_xlabel("idle time in superposition (µs)")
+    b.set_ylabel(r"$\langle X_i\rangle$ device / predicted")
+    b.legend(loc="lower left", fontsize=8)
+    fig.tight_layout()
+    if save:
+        fig.savefig(save, dpi=200, bbox_inches="tight")
+    return fig
+
+
+def verdicts(pairs, held_out, twirl, save=None):
+    """Figure candidate: the three pre-registered tests of the 100-qubit remainder, one panel each.
+    `pairs`: hardware.reproducibility pairs (kind, corr); `held_out`: excess on held-out steps, one row
+    per test split, columns prediction, frozen, linear, coherent; `twirl`: hardware.twirl_test table."""
+    style()
+    fig, (a, b, c) = plt.subplots(1, 3, figsize=(11.5, 3.4))
+    kinds = [("same", "two copies of\none circuit"), ("same_r", "same r,\nother order"),
+             ("neighbour", "ran next to\neach other"), ("other", "all other\npairs")]
+    rng = np.random.default_rng(0)
+    for x, (kind, _) in enumerate(kinds):
+        v = pairs[pairs.kind == kind]["corr"].to_numpy()
+        a.scatter(x + rng.uniform(-0.18, 0.18, len(v)), v, s=7, color=ORDER_COLOR[1], alpha=0.5, linewidths=0)
+        a.plot([x - 0.3, x + 0.3], [np.median(v)] * 2, color=INK, linewidth=2)
+    a.axhline(0.8, color=INK_2, linewidth=0.8, linestyle=":")
+    a.set_xticks(range(len(kinds)))
+    a.set_xticklabels([lab for _, lab in kinds], fontsize=8)
+    a.set_ylabel("correlation of deviations")
+    a.set_title("drift or circuit?")
+    models = [("prediction", "no correction"), ("frozen", "last deviation\ncarried on"),
+              ("linear", "linear in r"), ("coherent", "fixed coherent\nangles")]
+    for k, (split, row) in enumerate(held_out.iterrows()):
+        b.plot(range(len(models)), [row[m] for m, _ in models], marker="os^"[k], color=[INK, ORDER_COLOR[2], ORDER_COLOR[4]][k],
+               linewidth=1.0, label=split)
+    b.set_xticks(range(len(models)))
+    b.set_xticklabels([lab for _, lab in models], fontsize=8)
+    b.set_ylabel("excess error on held-out r")
+    b.set_title("a fixed error per step?")
+    b.legend(fontsize=7.5, loc="upper left")
+    for (order, r), row in twirl.iterrows():
+        c.plot([0, 1], [row.nd_gap_untwirled, row.nd_gap_twirled], color=ORDER_COLOR[order], marker=ORDER_MARKER[order],
+               linewidth=0.9, alpha=0.8)
+    c.set_xticks([0, 1])
+    c.set_xticklabels(["untwirled", "Pauli-twirled"])
+    c.set_xlim(-0.3, 1.3)
+    c.set_ylim(0, None)
+    c.set_ylabel("non-damping deviation (RMS)")
+    c.set_title("coherent?")
+    c.legend(handles=_order_handles([1, 2]), loc="upper right")
+    fig.tight_layout()
+    if save:
+        fig.savefig(save, dpi=200, bbox_inches="tight")
+    return fig
